@@ -110,6 +110,12 @@ below 10. That account cap is itself the ceiling on concurrent Bedrock spend.
 **`range_key is deprecated, use key_schema`** — ignore it. `key_schema` does not
 exist in AWS provider 6.64.0; the warning announces something unshipped.
 
+**There is no vector snapshot bucket, deliberately.** An S3 cache was in the
+first cut and has been removed. Authority for a tool's vector is the tool row;
+at 15-20 tools a cold-start scan is cheaper than keeping a second copy correct,
+and a second copy is exactly how two sources of truth drift apart. Revisit when
+the corpus outgrows a scan — a Phase 1 decision, made with Phase 0 data.
+
 **The billing alarm is a notification, not a cap.** It reports spend after the
 fact. The real controls are the `AWS_IAM` default on the search Function URL and
 the account concurrency limit.

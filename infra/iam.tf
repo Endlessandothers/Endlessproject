@@ -56,12 +56,6 @@ data "aws_iam_policy_document" "registry" {
   }
 
   statement {
-    sid       = "WriteVectorSnapshot"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.vectors.arn}/*"]
-  }
-
-  statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.registry.arn}:*"]
@@ -122,12 +116,6 @@ data "aws_iam_policy_document" "search" {
     sid       = "EmbedQuery"
     actions   = ["bedrock:InvokeModel"]
     resources = [local.embed_model_arn]
-  }
-
-  statement {
-    sid       = "ReadVectorSnapshot"
-    actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.vectors.arn}/*"]
   }
 
   statement {

@@ -23,6 +23,10 @@ on:
         description: "Optional -target=... for a narrow apply. Leave blank for the whole stack."
         required: false
         type: string
+      replace:
+        description: "Optional -replace=... to force one resource to be destroyed and recreated. DESTRUCTIVE — the resource's data does not survive."
+        required: false
+        type: string
 
 permissions:
   id-token: write
@@ -82,7 +86,12 @@ jobs:
         run: |
           TARGET=""
           if [ -n "${{ inputs.target }}" ]; then TARGET="-target=${{ inputs.target }}"; fi
-          terraform plan -input=false -lock-timeout=300s -out=ci.tfplan $TARGET
+          REPLACE=""
+          if [ -n "${{ inputs.replace }}" ]; then
+            REPLACE="-replace=${{ inputs.replace }}"
+            echo "::warning::Forcing replacement of ${{ inputs.replace }} — its data will not survive."
+          fi
+          terraform plan -input=false -lock-timeout=300s -out=ci.tfplan $TARGET $REPLACE
 
       - name: Apply
         working-directory: ${{ env.WORKDIR }}

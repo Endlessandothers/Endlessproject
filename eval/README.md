@@ -60,6 +60,19 @@ be undone. **If any of those three end up in the final seed set, their results
 are weaker evidence than the rest** and the findings write-up should say so.
 Everything else seeded in #10 is unseen by the author of this file.
 
+**Resolved 2026-09-14:** the three fixtures were removed from the registry by
+replacing the tools table through the CI apply workflow, so none of them will be
+in the scored corpus. Corpus-side bias is gone.
+
+What removal does NOT undo is topic selection: the choice to write weather, FX
+and reference-lookup queries was made after seeing those three domains. Nine of
+the sixty touch them — q030, q033, q020 directly, and q008, q013, q015, q035,
+q037, q049 adjacently. The effect is weak, since those are obvious agent tasks
+that would likely have been written anyway, but it is not zero.
+
+So issue #11 must still record a `contaminated` flag on those nine, and the
+findings must report recall both with and without them.
+
 This is recorded rather than quietly ignored because the entire point of Phase 0
 is deciding whether gap signal can be trusted. An eval set with an undisclosed
 thumb on the scale would answer the wrong question.
@@ -69,7 +82,7 @@ thumb on the scale would answer the wrong question.
 | Issue | Does |
 |---|---|
 | #10 | Seed 15–20 tools wrapping public APIs, descriptions written for retrieval |
-| #11 | Label these 60 against the seeded set, build the recall@k harness |
+| #11 | Label these 60 against the seeded set, build the recall@k harness. **Must also carry a `contaminated` flag per query** — see below |
 | #12 | Derive threshold `T` from the score distributions this produces |
 
 Note for #11: measured on 2026-09-14, `amazon.titan-embed-text-v2:0` produces

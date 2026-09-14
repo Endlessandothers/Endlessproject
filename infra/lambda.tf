@@ -1,9 +1,12 @@
 locals {
   common_env = {
-    TOOLS_TABLE    = aws_dynamodb_table.tools.name
-    EVENTS_TABLE   = aws_dynamodb_table.events.name
-    GAPS_TABLE     = aws_dynamodb_table.gaps.name
-    VECTORS_BUCKET = aws_s3_bucket.vectors.id
+    TOOLS_TABLE  = aws_dynamodb_table.tools.name
+    EVENTS_TABLE = aws_dynamodb_table.events.name
+    GAPS_TABLE   = aws_dynamodb_table.gaps.name
+    # No VECTORS_BUCKET. Authority for a tool's vector is the tool row, and at
+    # 15-20 tools a cold-start scan is cheaper than maintaining a second copy.
+    # A snapshot cache becomes a real decision when the corpus outgrows a scan,
+    # which is a Phase 1 problem with Phase 0 data in hand.
     EMBED_MODEL_ID = var.embed_model_id
     EMBED_DIMS     = tostring(var.embed_dims)
     THRESHOLD_T    = tostring(var.threshold_t)

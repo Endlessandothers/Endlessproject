@@ -22,11 +22,6 @@ output "tables" {
   }
 }
 
-output "vectors_bucket" {
-  description = "Derived vector-snapshot cache. Authority is the tools table."
-  value       = aws_s3_bucket.vectors.id
-}
-
 output "capacity_budget" {
   description = "Provisioned capacity against the always-free 25 RCU / 25 WCU."
   value = format(
