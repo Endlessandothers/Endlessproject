@@ -1,0 +1,31 @@
+# Force LF everywhere.
+#
+# Without this, Git checks source out as CRLF on Windows while GitHub's Linux
+# runners get LF. The archive_file provider then zips different bytes on each
+# platform, so aws_lambda_function.source_code_hash never matches: a local plan
+# always shows the three functions changing right after a CI apply, and a CI
+# plan shows the same right after a local one.
+#
+# The functions redeploy on every apply for no reason, and "No changes" stops
+# meaning anything — which is the part that actually matters, because a plan you
+# have learned to ignore is worse than no plan.
+
+* text=auto eol=lf
+
+# Belt and braces for the files that go into a Lambda zip.
+*.mjs  text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+
+# Infrastructure and CI definitions.
+*.tf   text eol=lf
+*.hcl  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+
+# Never touch these.
+*.pptx binary
+*.png  binary
+*.jpg  binary
+*.pdf  binary

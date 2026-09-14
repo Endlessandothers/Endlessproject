@@ -14,22 +14,34 @@ locals {
 }
 
 # ---------------------------------------------------------------- packaging
+#
+# output_file_mode is not cosmetic. Without it the archive provider stamps the
+# host's file modes into each zip entry, so a zip built on Windows and one built
+# on a Linux runner differ even when the source bytes are identical. The result
+# is aws_lambda_function.source_code_hash never matching between a local plan
+# and a CI plan: the three functions show as changing forever, they redeploy on
+# every apply, and "No changes" stops meaning anything.
+#
+# A plan you have learned to ignore is worse than no plan at all.
 data "archive_file" "registry" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/registry"
-  output_path = "${path.module}/.build/registry.zip"
+  type             = "zip"
+  source_dir       = "${path.module}/lambda/registry"
+  output_path      = "${path.module}/.build/registry.zip"
+  output_file_mode = "0666"
 }
 
 data "archive_file" "search" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/search"
-  output_path = "${path.module}/.build/search.zip"
+  type             = "zip"
+  source_dir       = "${path.module}/lambda/search"
+  output_path      = "${path.module}/.build/search.zip"
+  output_file_mode = "0666"
 }
 
 data "archive_file" "events" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/events"
-  output_path = "${path.module}/.build/events.zip"
+  type             = "zip"
+  source_dir       = "${path.module}/lambda/events"
+  output_path      = "${path.module}/.build/events.zip"
+  output_file_mode = "0666"
 }
 
 # ---------------------------------------------------------------- log groups
