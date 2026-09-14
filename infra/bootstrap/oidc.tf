@@ -209,6 +209,19 @@ data "aws_iam_policy_document" "apply" {
     resources = ["arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/${var.resource_prefix}-*"]
   }
 
+  # logs:DescribeLogGroups CANNOT be resource-scoped. AWS evaluates it against
+  # an empty log-group ARN - "log-group::log-stream:" - so the prefix-scoped
+  # grant above never matches it and every plan fails on AccessDeniedException
+  # while reading existing log groups.
+  #
+  # It is a list operation, so "*" is the only form that works. The mutating
+  # actions stay prefix-scoped above; this only widens discovery.
+  statement {
+    sid       = "ListLogGroups"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "ManageTopics"
     actions   = ["sns:*"]
