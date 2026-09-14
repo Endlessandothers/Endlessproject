@@ -9,6 +9,29 @@ variable "github_repo" {
   default     = "Endlessandothers/Endlessproject"
 }
 
+variable "sub_claim_prefix" {
+  description = <<-EOT
+    The literal prefix of the OIDC `sub` claim GitHub actually mints for this
+    repository. It is NOT simply "repo:owner/name".
+
+    This repository has IMMUTABLE SUBJECT CLAIMS enabled, so GitHub embeds the
+    numeric owner id and repository id in the subject:
+
+      repo:Endlessandothers@326342684/Endlessproject@1360952247:ref:refs/heads/main
+
+    That is a hardening feature: the numeric ids survive a rename or transfer,
+    so a trust policy pinned to them cannot be hijacked by someone recreating a
+    repository with the same name. Matching the human-readable form instead
+    fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity", which
+    looks like a permissions bug and is not one.
+
+    Read the current value for any repo with:
+      gh api repos/OWNER/NAME/actions/oidc/customization/sub
+  EOT
+  type        = string
+  default     = "repo:Endlessandothers@326342684/Endlessproject@1360952247"
+}
+
 variable "apply_branch" {
   description = "Only this branch may assume the apply role. Enforced in the trust policy, so it holds even if a workflow file is edited."
   type        = string

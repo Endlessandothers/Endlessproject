@@ -43,7 +43,7 @@ data "aws_iam_policy_document" "plan_assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values   = ["${var.sub_claim_prefix}:*"]
     }
   }
 }
@@ -146,7 +146,7 @@ data "aws_iam_policy_document" "apply_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/${var.apply_branch}"]
+      values   = ["${var.sub_claim_prefix}:ref:refs/heads/${var.apply_branch}"]
     }
   }
 }
