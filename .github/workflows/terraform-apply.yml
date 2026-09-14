@@ -1,0 +1,99 @@
+name: terraform apply
+
+# Manual trigger only, and only from the default branch.
+#
+# Normally the gate here would be a GitHub Environment with required reviewers.
+# That needs admin on the repository, which this account does not have, so the
+# gate is a typed confirmation plus a trust policy that refuses any ref other
+# than main. The trust policy is the part that actually enforces it: editing
+# this file on a branch cannot grant access, because AWS checks the branch in
+# the OIDC token claim, not here.
+#
+# If admin is obtained later, add `environment: production` to the apply job and
+# configure required reviewers - that is strictly better than a typed word.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply" to confirm. Anything else aborts.'
+        required: true
+        type: string
+      target:
+        description: "Optional -target=... for a narrow apply. Leave blank for the whole stack."
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+# Never two applies at once: the S3 lock would reject the second anyway, but
+# failing here is clearer than failing mid-run.
+concurrency:
+  group: tf-apply
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.15.8"
+  AWS_REGION: us-east-1
+  APPLY_ROLE: arn:aws:iam::258506450105:role/endless-gha-apply
+  WORKDIR: infra
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        if: inputs.confirm != 'apply'
+        run: |
+          echo "::error::Confirmation was '${{ inputs.confirm }}', expected 'apply'. Aborting."
+          exit 1
+
+      - name: Refuse to run off the default branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::apply runs from main only. AWS would refuse the role assumption anyway."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Assume write AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.APPLY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-apply-${{ github.run_id }}
+
+      - name: Init
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform init -input=false
+
+      # Plan and apply in one run, applying exactly the plan file that was just
+      # produced. Applying a plan from an earlier run risks acting on state that
+      # has since moved.
+      - name: Plan
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          TARGET=""
+          if [ -n "${{ inputs.target }}" ]; then TARGET="-target=${{ inputs.target }}"; fi
+          terraform plan -input=false -lock-timeout=300s -out=ci.tfplan $TARGET
+
+      - name: Apply
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform apply -input=false -lock-timeout=300s ci.tfplan
+
+      - name: Outputs
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform output
+
+      # A plan file can contain resolved variable values, so it is never kept.
+      - name: Shred plan
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        run: rm -f ci.tfplan

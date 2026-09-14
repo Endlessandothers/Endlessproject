@@ -1,0 +1,51 @@
+name: lambda ci
+
+# CI that only runs `terraform fmt` is not really CI. These are the checks that
+# would have caught a real defect in the handler code.
+#
+# Needs no AWS credentials at all - it never touches the account.
+
+on:
+  pull_request:
+    paths:
+      - "infra/lambda/**"
+      - "infra/tests/**"
+      - ".github/workflows/lambda-ci.yml"
+  push:
+    paths:
+      - "infra/lambda/**"
+      - "infra/tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Same major version the functions run on, so a syntax error that Lambda
+      # would reject at cold start fails here instead.
+      - name: Syntax check every handler
+        run: |
+          fail=0
+          for f in $(find infra/lambda -name '*.mjs'); do
+            if node --check "$f"; then
+              echo "ok    $f"
+            else
+              echo "FAIL  $f"; fail=1
+            fi
+          done
+          exit $fail
+
+      # Explicit file list rather than `node --test <dir>`: the directory form
+      # is not portable across Node versions and platforms (it fails on Node 24
+      # on Windows, where these are also run by hand before pushing).
+      - name: Unit tests
+        run: node --test $(find infra/tests -name '*.test.mjs')

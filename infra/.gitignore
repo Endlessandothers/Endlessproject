@@ -1,0 +1,20 @@
+# Provider plugins and backend config — re-created by `terraform init`
+.terraform/
+
+# Zips built by the archive provider from lambda/*
+.build/
+
+# Saved plans — these can contain resolved variable values
+*.tfplan
+
+# Local state should never exist here (the backend is S3), but never commit it
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Local variable overrides
+*.auto.tfvars
+terraform.tfvars
+
+# .terraform.lock.hcl is deliberately NOT ignored — it pins provider versions
+# and belongs in version control.
