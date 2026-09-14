@@ -15,7 +15,8 @@ output "oidc_provider_arn" {
 output "trust_summary" {
   description = "Who can assume what. Worth re-reading after any change here."
   value = {
-    plan  = "repo:${var.github_repo}:*  (any branch, any PR - read only)"
-    apply = "repo:${var.github_repo}:ref:refs/heads/${var.apply_branch}  (default branch only)"
+    plan  = "${var.sub_claim_prefix}:*  (any branch, any PR - read only)"
+    apply = "${var.sub_claim_prefix}:ref:refs/heads/${var.apply_branch}  (default branch only)"
+    note  = "Subject uses immutable numeric ids, not owner/name. See var.sub_claim_prefix."
   }
 }
