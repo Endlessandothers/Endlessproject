@@ -86,6 +86,9 @@ for (const q of queriesDoc.queries) {
     components: res.results.map((r) => ({ tool_id: r.tool_id, cosine: r.cosine, lexical: r.lexical })),
     fusion_alpha: res.fusion_alpha,
     gap_logged: res.gap_logged, threshold_t: res.threshold_t,
+    // Which mechanism made the call. Without this a judge-era result and a
+    // silent fallback to the threshold are indistinguishable after the fact.
+    decided_by: res.decided_by ?? null, judge_error: res.judge_error ?? null,
   });
   process.stdout.write(".");
 }
