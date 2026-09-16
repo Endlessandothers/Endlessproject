@@ -1,0 +1,1354 @@
+{
+  "ran_at": "2026-09-16T04:04:13.356Z",
+  "queries_sha256": "6ff8f77cd01aff77418b657477adfe984ad4edd71c7384f1de212bbb41daabdf",
+  "corpus": "tools/catalog.json v1, 19 tools",
+  "k": 3,
+  "metrics": {
+    "all": {
+      "n": 60,
+      "answerable": 11,
+      "unanswerable": 49,
+      "recall1": 1,
+      "recall3": 1,
+      "false_gap_rate": 0,
+      "gap_detection_rate": 0
+    },
+    "excluding_contaminated": {
+      "n": 51,
+      "answerable": 7,
+      "unanswerable": 44,
+      "recall1": 1,
+      "recall3": 1,
+      "false_gap_rate": 0,
+      "gap_detection_rate": 0
+    }
+  },
+  "distributions": {
+    "correct_hits": [
+      0.1426404517315898,
+      0.1992499257379437,
+      0.2317119740853891,
+      0.2570102831599599,
+      0.2734084106376056,
+      0.305217354337917,
+      0.3823205200352003,
+      0.3963148756595286,
+      0.4844749368690221,
+      0.4885196236856035,
+      0.6896753236826667
+    ],
+    "no_answer_tops": [
+      0.06260137272257273,
+      0.06948086708293563,
+      0.07357756349819074,
+      0.08656244905217078,
+      0.08680525417781473,
+      0.08821959681434026,
+      0.09553548768258005,
+      0.09631140599594837,
+      0.09863024901650028,
+      0.10315212525695502,
+      0.10319343626751895,
+      0.1050642059619822,
+      0.10586619398450736,
+      0.10623954235192257,
+      0.10667919693139757,
+      0.10730500113707644,
+      0.10825816854905602,
+      0.10856868630699178,
+      0.11059194966087768,
+      0.11146994919062894,
+      0.11380768844601688,
+      0.11471139588447278,
+      0.11575943543565166,
+      0.11668036360207037,
+      0.1196934502986386,
+      0.12304908763063253,
+      0.12486935051761422,
+      0.12735123985763303,
+      0.1307691693506603,
+      0.13107137641062147,
+      0.13216291005575548,
+      0.13625796324918488,
+      0.1410414241802394,
+      0.1426732621923294,
+      0.14493172995249623,
+      0.14838517930240946,
+      0.14903799666629694,
+      0.14905831435962516,
+      0.15494613772299579,
+      0.16180069076688633,
+      0.16799444860247154,
+      0.17311912174455904,
+      0.1825313774102848,
+      0.1948636310997466,
+      0.19850761586944285,
+      0.20290237678728618,
+      0.21688334459948663,
+      0.2573137080705311,
+      0.3361891575669284
+    ]
+  },
+  "rows": [
+    {
+      "id": "q001",
+      "text": "how long will it take to drive from the office to the airport at 6am on a Tuesday",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "elevation-lookup",
+      "top_score": 0.11059194966087768,
+      "ranked": [
+        "elevation-lookup",
+        "github-repo-info",
+        "wikipedia-summary"
+      ],
+      "scores": [
+        0.11059194966087768,
+        0.06361744375067954,
+        0.06231686021935831
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q002",
+      "text": "turn this scanned receipt image into structured line items I can total",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "food-product-nutrition",
+      "top_score": 0.1948636310997466,
+      "ranked": [
+        "food-product-nutrition",
+        "qr-code-generate",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.1948636310997466,
+        0.1542332857068301,
+        0.1259324910080895
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q003",
+      "text": "what timezone is this customer in and is it currently working hours for them",
+      "expect": "current-time-in-zone",
+      "confidence": "medium",
+      "contaminated": false,
+      "top": "current-time-in-zone",
+      "top_score": 0.305217354337917,
+      "ranked": [
+        "current-time-in-zone",
+        "sunrise-sunset",
+        "geocode-address"
+      ],
+      "scores": [
+        0.305217354337917,
+        0.11234752399611686,
+        0.11060119421995519
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q004",
+      "text": "split this 40 minute recording into chapters with timestamps",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "recent-earthquakes",
+      "top_score": 0.16799444860247154,
+      "ranked": [
+        "recent-earthquakes",
+        "qr-code-generate",
+        "worldbank-indicator"
+      ],
+      "scores": [
+        0.16799444860247154,
+        0.13458255911834113,
+        0.12431717152361751
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q005",
+      "text": "check whether this domain is available to register",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.1196934502986386,
+      "ranked": [
+        "public-ip-lookup",
+        "public-holidays",
+        "current-time-in-zone"
+      ],
+      "scores": [
+        0.1196934502986386,
+        0.11653915758230877,
+        0.10162889956403809
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q006",
+      "text": "convert 2.5 acres into square metres",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "elevation-lookup",
+      "top_score": 0.19850761586944285,
+      "ranked": [
+        "elevation-lookup",
+        "geocode-address",
+        "reverse-geocode"
+      ],
+      "scores": [
+        0.19850761586944285,
+        0.17556282392423467,
+        0.14208802090615386
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q007",
+      "text": "which public holidays fall in the next 30 days in Ghana",
+      "expect": "public-holidays",
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-holidays",
+      "top_score": 0.3823205200352003,
+      "ranked": [
+        "public-holidays",
+        "currency-convert",
+        "sunrise-sunset"
+      ],
+      "scores": [
+        0.3823205200352003,
+        0.1482395448963841,
+        0.09792207449572074
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q008",
+      "text": "summarise what this company does from its website",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": true,
+      "top": "worldbank-indicator",
+      "top_score": 0.15494613772299579,
+      "ranked": [
+        "worldbank-indicator",
+        "github-repo-info",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.15494613772299579,
+        0.14764205384593312,
+        0.12089560607364513
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q009",
+      "text": "is this email address a real deliverable mailbox or a throwaway",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.11146994919062894,
+      "ranked": [
+        "public-ip-lookup",
+        "reverse-geocode",
+        "postal-code-lookup"
+      ],
+      "scores": [
+        0.11146994919062894,
+        0.0968908649899992,
+        0.08798745128171243
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q010",
+      "text": "find the latitude and longitude for this street address",
+      "expect": "geocode-address",
+      "confidence": "high",
+      "contaminated": false,
+      "top": "geocode-address",
+      "top_score": 0.6896753236826667,
+      "ranked": [
+        "geocode-address",
+        "reverse-geocode",
+        "elevation-lookup"
+      ],
+      "scores": [
+        0.6896753236826667,
+        0.434582354565006,
+        0.15226570667761719
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q011",
+      "text": "what does this error code from a Postgres driver actually mean",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "crypto-spot-price",
+      "top_score": 0.09631140599594837,
+      "ranked": [
+        "crypto-spot-price",
+        "qr-code-generate",
+        "github-repo-info"
+      ],
+      "scores": [
+        0.09631140599594837,
+        0.0897946810844051,
+        0.0718264936647188
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q012",
+      "text": "generate a QR code that points at this URL",
+      "expect": "qr-code-generate",
+      "confidence": "high",
+      "contaminated": false,
+      "top": "qr-code-generate",
+      "top_score": 0.4885196236856035,
+      "ranked": [
+        "qr-code-generate",
+        "reverse-geocode",
+        "weather-forecast"
+      ],
+      "scores": [
+        0.4885196236856035,
+        0.13299266059727147,
+        0.12231198561790717
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q013",
+      "text": "how much would 500 dollars in 1998 be worth today",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": true,
+      "top": "crypto-spot-price",
+      "top_score": 0.12735123985763303,
+      "ranked": [
+        "crypto-spot-price",
+        "worldbank-indicator",
+        "public-ip-lookup"
+      ],
+      "scores": [
+        0.12735123985763303,
+        0.12378793846955943,
+        0.09363899277120187
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q014",
+      "text": "extract every table from this PDF as CSV",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "worldbank-indicator",
+      "top_score": 0.14905831435962516,
+      "ranked": [
+        "worldbank-indicator",
+        "recent-earthquakes",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.14905831435962516,
+        0.13882537301324085,
+        0.11565745020478542
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q015",
+      "text": "what is the current air quality where I am",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": true,
+      "top": "crossref-paper-search",
+      "top_score": 0.10667919693139757,
+      "ranked": [
+        "crossref-paper-search",
+        "current-time-in-zone",
+        "worldbank-indicator"
+      ],
+      "scores": [
+        0.10667919693139757,
+        0.10399745703657794,
+        0.0928683706281548
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q016",
+      "text": "rewrite this paragraph at a sixth grade reading level",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "wikipedia-summary",
+      "top_score": 0.12486935051761422,
+      "ranked": [
+        "wikipedia-summary",
+        "recent-earthquakes",
+        "public-holidays"
+      ],
+      "scores": [
+        0.12486935051761422,
+        0.07253460365494678,
+        0.05535730111324853
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q017",
+      "text": "tell me the licence of this open source package before I depend on it",
+      "expect": "github-repo-info",
+      "confidence": "high",
+      "contaminated": false,
+      "top": "github-repo-info",
+      "top_score": 0.2734084106376056,
+      "ranked": [
+        "github-repo-info",
+        "book-by-isbn",
+        "food-product-nutrition"
+      ],
+      "scores": [
+        0.2734084106376056,
+        0.14597624479265606,
+        0.10026110805847468
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q018",
+      "text": "what were the closing prices for this ticker over the last five sessions",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "crypto-spot-price",
+      "top_score": 0.11668036360207037,
+      "ranked": [
+        "crypto-spot-price",
+        "worldbank-indicator",
+        "currency-convert"
+      ],
+      "scores": [
+        0.11668036360207037,
+        0.07666438332801412,
+        0.0667781008867484
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q019",
+      "text": "translate this support message into English and tell me the sentiment",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "github-repo-info",
+      "top_score": 0.09553548768258005,
+      "ranked": [
+        "github-repo-info",
+        "book-by-isbn",
+        "wikipedia-summary"
+      ],
+      "scores": [
+        0.09553548768258005,
+        0.08558541650041097,
+        0.08156683443198723
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q020",
+      "text": "give me a short factual background on this historical event",
+      "expect": "wikipedia-summary",
+      "confidence": "high",
+      "contaminated": true,
+      "top": "wikipedia-summary",
+      "top_score": 0.2317119740853891,
+      "ranked": [
+        "wikipedia-summary",
+        "book-by-isbn",
+        "recent-earthquakes"
+      ],
+      "scores": [
+        0.2317119740853891,
+        0.1207920213241705,
+        0.101925025486801
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q021",
+      "text": "check if this website is down for everyone or just me",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "qr-code-generate",
+      "top_score": 0.08680525417781473,
+      "ranked": [
+        "qr-code-generate",
+        "public-ip-lookup",
+        "elevation-lookup"
+      ],
+      "scores": [
+        0.08680525417781473,
+        0.08116835320363903,
+        0.07262930491087753
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q022",
+      "text": "what is the nutritional content of 200g of cooked brown rice",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": false,
+      "top": "food-product-nutrition",
+      "top_score": 0.13107137641062147,
+      "ranked": [
+        "food-product-nutrition",
+        "worldbank-indicator",
+        "qr-code-generate"
+      ],
+      "scores": [
+        0.13107137641062147,
+        0.10065728485062132,
+        0.08938377079828651
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q023",
+      "text": "find peer reviewed papers published this year on retrieval augmented generation",
+      "expect": "crossref-paper-search",
+      "confidence": "high",
+      "contaminated": false,
+      "top": "crossref-paper-search",
+      "top_score": 0.2570102831599599,
+      "ranked": [
+        "crossref-paper-search",
+        "book-by-isbn",
+        "worldbank-indicator"
+      ],
+      "scores": [
+        0.2570102831599599,
+        0.1551002240368039,
+        0.11422340740282175
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q024",
+      "text": "resize and compress these images for the web without visible quality loss",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "qr-code-generate",
+      "top_score": 0.1825313774102848,
+      "ranked": [
+        "qr-code-generate",
+        "recent-earthquakes",
+        "elevation-lookup"
+      ],
+      "scores": [
+        0.1825313774102848,
+        0.12790889510949774,
+        0.10056686578286254
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q025",
+      "text": "what is the shipping cost and delivery estimate for a 2kg parcel to Lagos",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "crossref-paper-search",
+      "top_score": 0.10319343626751895,
+      "ranked": [
+        "crossref-paper-search",
+        "postal-code-lookup",
+        "reverse-geocode"
+      ],
+      "scores": [
+        0.10319343626751895,
+        0.0983321872808201,
+        0.08719543091535696
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q026",
+      "text": "parse this cron expression and tell me when it next fires",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "weather-forecast",
+      "top_score": 0.10586619398450736,
+      "ranked": [
+        "weather-forecast",
+        "crossref-paper-search",
+        "recent-earthquakes"
+      ],
+      "scores": [
+        0.10586619398450736,
+        0.08470688887061661,
+        0.08362863153801565
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q027",
+      "text": "is this credit card number format valid before I submit the form",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "current-time-in-zone",
+      "top_score": 0.13216291005575548,
+      "ranked": [
+        "current-time-in-zone",
+        "qr-code-generate",
+        "postal-code-lookup"
+      ],
+      "scores": [
+        0.13216291005575548,
+        0.10220628275125156,
+        0.09743159049775825
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q028",
+      "text": "who owns this IP address and what country is it in",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.3361891575669284,
+      "ranked": [
+        "public-ip-lookup",
+        "reverse-geocode",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.3361891575669284,
+        0.11294432876581087,
+        0.11052404065868782
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q029",
+      "text": "draft a calendar invite from this email thread and pick a time everyone is free",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "sunrise-sunset",
+      "top_score": 0.16180069076688633,
+      "ranked": [
+        "sunrise-sunset",
+        "current-time-in-zone",
+        "public-ip-lookup"
+      ],
+      "scores": [
+        0.16180069076688633,
+        0.14471854486318306,
+        0.13185775025382251
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q030",
+      "text": "what is the weather going to do this weekend where I live",
+      "expect": "weather-forecast",
+      "confidence": "high",
+      "contaminated": true,
+      "top": "weather-forecast",
+      "top_score": 0.1426404517315898,
+      "ranked": [
+        "weather-forecast",
+        "elevation-lookup",
+        "crossref-paper-search"
+      ],
+      "scores": [
+        0.1426404517315898,
+        0.08819890475081406,
+        0.08083446770490234
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q031",
+      "text": "transcribe this voice note and pull out the action items",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "book-by-isbn",
+      "top_score": 0.11380768844601688,
+      "ranked": [
+        "book-by-isbn",
+        "current-time-in-zone",
+        "geocode-address"
+      ],
+      "scores": [
+        0.11380768844601688,
+        0.10634640354620035,
+        0.09770199032930432
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q032",
+      "text": "find the cheapest flight between these two cities next month",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "elevation-lookup",
+      "top_score": 0.1050642059619822,
+      "ranked": [
+        "elevation-lookup",
+        "reverse-geocode",
+        "postal-code-lookup"
+      ],
+      "scores": [
+        0.1050642059619822,
+        0.09331691990689565,
+        0.07865658708879578
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q033",
+      "text": "what is the exchange rate from cedis to euros right now",
+      "expect": "currency-convert",
+      "confidence": "high",
+      "contaminated": true,
+      "top": "currency-convert",
+      "top_score": 0.1992499257379437,
+      "ranked": [
+        "currency-convert",
+        "crypto-spot-price",
+        "postal-code-lookup"
+      ],
+      "scores": [
+        0.1992499257379437,
+        0.14726431168710458,
+        0.06351767565372715
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q034",
+      "text": "check this text for plagiarism against published sources",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "book-by-isbn",
+      "top_score": 0.2573137080705311,
+      "ranked": [
+        "book-by-isbn",
+        "crossref-paper-search",
+        "github-repo-info"
+      ],
+      "scores": [
+        0.2573137080705311,
+        0.21955591120103843,
+        0.1472334647756407
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q035",
+      "text": "what is the estimated population of this city",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": true,
+      "top": "github-repo-info",
+      "top_score": 0.10315212525695502,
+      "ranked": [
+        "github-repo-info",
+        "postal-code-lookup",
+        "elevation-lookup"
+      ],
+      "scores": [
+        0.10315212525695502,
+        0.10086470261983352,
+        0.09879860407815684
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q036",
+      "text": "validate this JSON against the schema and tell me exactly what is wrong",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "github-repo-info",
+      "top_score": 0.12304908763063253,
+      "ranked": [
+        "github-repo-info",
+        "qr-code-generate",
+        "crossref-paper-search"
+      ],
+      "scores": [
+        0.12304908763063253,
+        0.09263308249879283,
+        0.08894049879085034
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q037",
+      "text": "give me the sunrise and sunset times for a given date and place",
+      "expect": "sunrise-sunset",
+      "confidence": "high",
+      "contaminated": true,
+      "top": "sunrise-sunset",
+      "top_score": 0.4844749368690221,
+      "ranked": [
+        "sunrise-sunset",
+        "weather-forecast",
+        "current-time-in-zone"
+      ],
+      "scores": [
+        0.4844749368690221,
+        0.23983645747707,
+        0.18157684759377574
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q038",
+      "text": "look up the recall history for this car by VIN",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "recent-earthquakes",
+      "top_score": 0.17311912174455904,
+      "ranked": [
+        "recent-earthquakes",
+        "qr-code-generate",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.17311912174455904,
+        0.09077199964444625,
+        0.08633566771027901
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q039",
+      "text": "generate a strong passphrase I can actually remember",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.13625796324918488,
+      "ranked": [
+        "public-ip-lookup",
+        "current-time-in-zone",
+        "recent-earthquakes"
+      ],
+      "scores": [
+        0.13625796324918488,
+        0.08703613826693879,
+        0.07933548947040114
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q040",
+      "text": "what is the tax rate on this category of goods in this country",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "worldbank-indicator",
+      "top_score": 0.1426732621923294,
+      "ranked": [
+        "worldbank-indicator",
+        "crypto-spot-price",
+        "currency-convert"
+      ],
+      "scores": [
+        0.1426732621923294,
+        0.09813058322044003,
+        0.09760200324283343
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q041",
+      "text": "diff these two contracts and show me only the substantive changes",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "worldbank-indicator",
+      "top_score": 0.10825816854905602,
+      "ranked": [
+        "worldbank-indicator",
+        "crossref-paper-search",
+        "github-repo-info"
+      ],
+      "scores": [
+        0.10825816854905602,
+        0.10352668615801619,
+        0.09118413431751018
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q042",
+      "text": "find a stock photo I am allowed to use commercially for free",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "qr-code-generate",
+      "top_score": 0.1307691693506603,
+      "ranked": [
+        "qr-code-generate",
+        "github-repo-info",
+        "recent-earthquakes"
+      ],
+      "scores": [
+        0.1307691693506603,
+        0.12456539426136433,
+        0.07014937990130689
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q043",
+      "text": "what is the current price of electricity per kilowatt hour here",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": false,
+      "top": "crypto-spot-price",
+      "top_score": 0.11471139588447278,
+      "ranked": [
+        "crypto-spot-price",
+        "current-time-in-zone",
+        "reverse-geocode"
+      ],
+      "scores": [
+        0.11471139588447278,
+        0.11240250290933679,
+        0.09474104596353863
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q044",
+      "text": "convert this markdown document into a clean printable PDF",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "book-by-isbn",
+      "top_score": 0.14838517930240946,
+      "ranked": [
+        "book-by-isbn",
+        "qr-code-generate",
+        "crossref-paper-search"
+      ],
+      "scores": [
+        0.14838517930240946,
+        0.11422115888989423,
+        0.11059360455993164
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q045",
+      "text": "which of these 300 addresses are duplicates of each other",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "postal-code-lookup",
+      "top_score": 0.20290237678728618,
+      "ranked": [
+        "postal-code-lookup",
+        "reverse-geocode",
+        "geocode-address"
+      ],
+      "scores": [
+        0.20290237678728618,
+        0.16125513425241808,
+        0.14334273479725101
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q046",
+      "text": "what does this medical abbreviation stand for in a discharge summary",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "postal-code-lookup",
+      "top_score": 0.06260137272257273,
+      "ranked": [
+        "postal-code-lookup",
+        "worldbank-indicator",
+        "food-product-nutrition"
+      ],
+      "scores": [
+        0.06260137272257273,
+        0.061852594329234276,
+        0.05943074679883661
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q047",
+      "text": "monitor this page and tell me when the price drops",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "recent-earthquakes",
+      "top_score": 0.11575943543565166,
+      "ranked": [
+        "recent-earthquakes",
+        "qr-code-generate",
+        "current-time-in-zone"
+      ],
+      "scores": [
+        0.11575943543565166,
+        0.10483554310080953,
+        0.09176378248000809
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q048",
+      "text": "what is the carbon footprint of a flight between these airports",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "elevation-lookup",
+      "top_score": 0.14903799666629694,
+      "ranked": [
+        "elevation-lookup",
+        "github-repo-info",
+        "sunrise-sunset"
+      ],
+      "scores": [
+        0.14903799666629694,
+        0.09471023715170919,
+        0.08806959640607895
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q049",
+      "text": "give me the definition and etymology of an unfamiliar word",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": true,
+      "top": "current-time-in-zone",
+      "top_score": 0.10730500113707644,
+      "ranked": [
+        "current-time-in-zone",
+        "book-by-isbn",
+        "crossref-paper-search"
+      ],
+      "scores": [
+        0.10730500113707644,
+        0.09562468965999583,
+        0.0856562380685309
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q050",
+      "text": "check whether this username is taken across the major platforms",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "book-by-isbn",
+      "top_score": 0.14493172995249623,
+      "ranked": [
+        "book-by-isbn",
+        "current-time-in-zone",
+        "sunrise-sunset"
+      ],
+      "scores": [
+        0.14493172995249623,
+        0.12077540854652853,
+        0.11770580647864673
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q051",
+      "text": "estimate how long this article takes to read",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "wikipedia-summary",
+      "top_score": 0.21688334459948663,
+      "ranked": [
+        "wikipedia-summary",
+        "crossref-paper-search",
+        "qr-code-generate"
+      ],
+      "scores": [
+        0.21688334459948663,
+        0.18645630273112396,
+        0.10431412308007586
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q052",
+      "text": "find the nearest hospital with an emergency department",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": false,
+      "top": "elevation-lookup",
+      "top_score": 0.10623954235192257,
+      "ranked": [
+        "elevation-lookup",
+        "recent-earthquakes",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.10623954235192257,
+        0.09726989899099352,
+        0.06161580982269715
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q053",
+      "text": "what is the ISBN for this book and is it still in print",
+      "expect": "book-by-isbn",
+      "confidence": "medium",
+      "contaminated": false,
+      "top": "book-by-isbn",
+      "top_score": 0.3963148756595286,
+      "ranked": [
+        "book-by-isbn",
+        "worldbank-indicator",
+        "crossref-paper-search"
+      ],
+      "scores": [
+        0.3963148756595286,
+        0.1424168992026874,
+        0.13123796244923377
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q054",
+      "text": "redact every name and phone number from this transcript",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.1410414241802394,
+      "ranked": [
+        "public-ip-lookup",
+        "qr-code-generate",
+        "book-by-isbn"
+      ],
+      "scores": [
+        0.1410414241802394,
+        0.09770363671318384,
+        0.08306111285401155
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q055",
+      "text": "what football fixtures are on this weekend for this league",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "current-time-in-zone",
+      "top_score": 0.07357756349819074,
+      "ranked": [
+        "current-time-in-zone",
+        "postal-code-lookup",
+        "worldbank-indicator"
+      ],
+      "scores": [
+        0.07357756349819074,
+        0.06067890980099758,
+        0.058386558633259984
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q056",
+      "text": "book me a haircut appointment with my usual barber",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "current-time-in-zone",
+      "top_score": 0.08821959681434026,
+      "ranked": [
+        "current-time-in-zone",
+        "postal-code-lookup",
+        "qr-code-generate"
+      ],
+      "scores": [
+        0.08821959681434026,
+        0.08338001124386624,
+        0.07825871044918702
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q057",
+      "text": "negotiate a lower price with this supplier on my behalf",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "postal-code-lookup",
+      "top_score": 0.10856868630699178,
+      "ranked": [
+        "postal-code-lookup",
+        "public-ip-lookup",
+        "reverse-geocode"
+      ],
+      "scores": [
+        0.10856868630699178,
+        0.08931324124373537,
+        0.08617426788651811
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q058",
+      "text": "tell me whether my landlord is allowed to do this under Ghanaian tenancy law",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.06948086708293563,
+      "ranked": [
+        "public-ip-lookup",
+        "reverse-geocode",
+        "currency-convert"
+      ],
+      "scores": [
+        0.06948086708293563,
+        0.06017700999713286,
+        0.060039680380953676
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q059",
+      "text": "watch my inbox and only wake me for things that actually matter",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.08656244905217078,
+      "ranked": [
+        "public-ip-lookup",
+        "github-repo-info",
+        "sunrise-sunset"
+      ],
+      "scores": [
+        0.08656244905217078,
+        0.08405058752821455,
+        0.07929933910244999
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    },
+    {
+      "id": "q060",
+      "text": "figure out why my toddler will not sleep through the night",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false,
+      "top": "public-ip-lookup",
+      "top_score": 0.09863024901650028,
+      "ranked": [
+        "public-ip-lookup",
+        "github-repo-info",
+        "weather-forecast"
+      ],
+      "scores": [
+        0.09863024901650028,
+        0.0515274438117124,
+        0.045185577870739624
+      ],
+      "gap_logged": false,
+      "threshold_t": 0.05
+    }
+  ]
+}

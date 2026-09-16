@@ -22,7 +22,16 @@ const DIMS = Number(process.env.EMBED_DIMS || 1024);
 const THRESHOLD_T = Number(process.env.THRESHOLD_T || 0.5);
 
 // Cache survives warm invocations. This is what makes brute force viable.
+//
+// It is TIME-BOUNDED on purpose. With an unbounded cache a newly registered
+// tool stays invisible to search until the execution environment happens to
+// recycle, which can be minutes or hours and is not observable from outside.
+// That silently invalidated a whole evaluation run on 2026-09-16: two different
+// description sets produced byte-identical scores because the second was never
+// loaded.
 let toolCache = null;
+let toolCacheAt = 0;
+const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 60000);
 
 const json = (status, body) => ({
   statusCode: status,
@@ -43,7 +52,7 @@ async function embed(text) {
 
 // Authority for a vector is the tool row. The S3 snapshot is a derived cache.
 async function loadTools() {
-  if (toolCache) return toolCache;
+  if (toolCache && Date.now() - toolCacheAt < CACHE_TTL_MS) return toolCache;
   const latest = new Map();
   let key;
   do {
@@ -57,6 +66,7 @@ async function loadTools() {
     key = out.LastEvaluatedKey;
   } while (key);
 
+  toolCacheAt = Date.now();
   toolCache = [...latest.values()].map((t) => ({
     tool_id: t.tool_id,
     version: t.version,

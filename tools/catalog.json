@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "issue": "#10 — seed 15-20 tools wrapping public APIs",
   "seeded_at": "2026-09-14",
   "description_policy": "Written for RETRIEVAL, not marketing. Each says what the tool does in the nouns and verbs a caller would use mid-task, names the concrete things it returns, and avoids the tool's own brand vocabulary. Description quality is the ceiling on every number Phase 0 produces, so each was written after calling the API and reading its real response.",
@@ -15,10 +15,16 @@
       "category": "geo",
       "source_api": "open-meteo.com",
       "terms": "https://open-meteo.com/en/terms",
-      "description": "Hourly and daily weather forecast for a latitude and longitude: temperature, precipitation, wind speed and cloud cover, from now up to 16 days ahead. Answers what conditions will be like at a place on a given day, including whether it will rain.",
+      "description": "Weather forecast by hour and by day for a latitude and longitude: temperature, rainfall probability, wind speed and cloud cover, up to sixteen days ahead.",
       "url": "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,precipitation_probability&forecast_days=3",
-      "input": { "lat": "number, decimal degrees", "lon": "number, decimal degrees" },
-      "sample": { "lat": 5.6, "lon": -0.19 },
+      "input": {
+        "lat": "number, decimal degrees",
+        "lon": "number, decimal degrees"
+      },
+      "sample": {
+        "lat": 5.6,
+        "lon": -0.19
+      },
       "probe": "hourly.time"
     },
     {
@@ -27,10 +33,14 @@
       "category": "geo",
       "source_api": "nominatim.openstreetmap.org",
       "terms": "https://operations.osmfoundation.org/policies/nominatim/",
-      "description": "Turn a written place name or street address into latitude and longitude. Accepts partial and informal input such as a city, a landmark or a postal address, and returns the best matching coordinates with a normalised display name.",
+      "description": "Converts a street address, place name or landmark into latitude and longitude coordinates.",
       "url": "https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1",
-      "input": { "query": "string, an address or place name" },
-      "sample": { "query": "Independence Square Accra" },
+      "input": {
+        "query": "string, an address or place name"
+      },
+      "sample": {
+        "query": "Independence Square Accra"
+      },
       "probe": "[0].lat"
     },
     {
@@ -39,10 +49,16 @@
       "category": "geo",
       "source_api": "nominatim.openstreetmap.org",
       "terms": "https://operations.osmfoundation.org/policies/nominatim/",
-      "description": "Turn a latitude and longitude into a human readable address: street, neighbourhood, city, region, postcode and country. Answers where a given point actually is.",
+      "description": "Converts latitude and longitude coordinates into a street address with neighbourhood, city, region, postcode and country.",
       "url": "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json",
-      "input": { "lat": "number", "lon": "number" },
-      "sample": { "lat": 5.5502, "lon": -0.2174 },
+      "input": {
+        "lat": "number",
+        "lon": "number"
+      },
+      "sample": {
+        "lat": 5.5502,
+        "lon": -0.2174
+      },
       "probe": "display_name"
     },
     {
@@ -51,10 +67,18 @@
       "category": "finance",
       "source_api": "frankfurter.app",
       "terms": "https://www.frankfurter.app/docs/",
-      "description": "Convert an amount of money from one currency into another at current or historical exchange rates. Covers major and many minor currencies and can answer what a sum was worth on a specific past date.",
+      "description": "Exchange rates between national currencies such as GHS, USD, EUR, GBP and JPY. Converts an amount of money from one country's currency into another's, at today's rate or at a past date's rate.",
       "url": "https://api.frankfurter.app/latest?from={from}&to={to}&amount={amount}",
-      "input": { "from": "ISO currency code", "to": "ISO currency code", "amount": "number" },
-      "sample": { "from": "USD", "to": "EUR", "amount": 100 },
+      "input": {
+        "from": "ISO currency code",
+        "to": "ISO currency code",
+        "amount": "number"
+      },
+      "sample": {
+        "from": "USD",
+        "to": "EUR",
+        "amount": 100
+      },
       "probe": "rates"
     },
     {
@@ -63,10 +87,14 @@
       "category": "reference",
       "source_api": "en.wikipedia.org",
       "terms": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
-      "description": "Short factual background on a person, place, organisation, event or concept, drawn from an encyclopedia article. Returns a plain prose summary plus the article title and link, for getting oriented on an unfamiliar subject.",
+      "description": "Encyclopedia article summary for a notable person, place, organisation, historical event or concept. Returns factual background prose with the article title and link.",
       "url": "https://en.wikipedia.org/api/rest_v1/page/summary/{title}",
-      "input": { "title": "string, the subject or article title" },
-      "sample": { "title": "Kwame Nkrumah" },
+      "input": {
+        "title": "string, the subject or article title"
+      },
+      "sample": {
+        "title": "Kwame Nkrumah"
+      },
       "probe": "extract"
     },
     {
@@ -75,10 +103,16 @@
       "category": "calendar",
       "source_api": "date.nager.at",
       "terms": "https://date.nager.at/Home/Terms",
-      "description": "Official public holidays for a country in a given year, with the date, local name and English name of each. Useful for working out whether offices will be closed, or which days in a period are non working.",
+      "description": "Statutory public holidays observed by a country in a calendar year, with each holiday's date, local name and English name.",
       "url": "https://date.nager.at/api/v3/PublicHolidays/{year}/{country}",
-      "input": { "year": "four digit year", "country": "ISO 3166 two letter country code" },
-      "sample": { "year": 2026, "country": "GH" },
+      "input": {
+        "year": "four digit year",
+        "country": "ISO 3166 two letter country code"
+      },
+      "sample": {
+        "year": 2026,
+        "country": "GH"
+      },
       "probe": "[0].date"
     },
     {
@@ -87,10 +121,16 @@
       "category": "geo",
       "source_api": "sunrise-sunset.org",
       "terms": "https://sunrise-sunset.org/api",
-      "description": "Sunrise, sunset, solar noon, dawn, dusk and day length for a latitude and longitude on a given date. Answers how much daylight there is and when it starts and ends at a place.",
+      "description": "Sunrise, sunset, solar noon, civil dawn, civil dusk and length of daylight for a latitude and longitude on a date.",
       "url": "https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}&formatted=0",
-      "input": { "lat": "number", "lon": "number" },
-      "sample": { "lat": 5.6, "lon": -0.19 },
+      "input": {
+        "lat": "number",
+        "lon": "number"
+      },
+      "sample": {
+        "lat": 5.6,
+        "lon": -0.19
+      },
       "probe": "results.sunrise"
     },
     {
@@ -99,10 +139,16 @@
       "category": "geo",
       "source_api": "open-elevation.com",
       "terms": "https://open-elevation.com/",
-      "description": "Height above sea level in metres for a latitude and longitude. Answers how high above sea level a point is, for terrain, flooding and route questions.",
+      "description": "Height of the ground in metres above sea level at a latitude and longitude.",
       "url": "https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}",
-      "input": { "lat": "number", "lon": "number" },
-      "sample": { "lat": 5.6, "lon": -0.19 },
+      "input": {
+        "lat": "number",
+        "lon": "number"
+      },
+      "sample": {
+        "lat": 5.6,
+        "lon": -0.19
+      },
       "probe": "results[0].elevation"
     },
     {
@@ -111,10 +157,16 @@
       "category": "geo",
       "source_api": "zippopotam.us",
       "terms": "https://www.zippopotam.us/",
-      "description": "Which town, state and coordinates a postal or ZIP code refers to. Works the other way from an address lookup: give the code, get the places it covers, for validating or expanding an address.",
+      "description": "Settlements covered by a ZIP or postcode, with their state or region and coordinates.",
       "url": "https://api.zippopotam.us/{country}/{code}",
-      "input": { "country": "two letter country code", "code": "postal or ZIP code" },
-      "sample": { "country": "us", "code": "90210" },
+      "input": {
+        "country": "two letter country code",
+        "code": "postal or ZIP code"
+      },
+      "sample": {
+        "country": "us",
+        "code": "90210"
+      },
       "probe": "places[0].place name"
     },
     {
@@ -123,10 +175,14 @@
       "category": "research",
       "source_api": "api.crossref.org",
       "terms": "https://www.crossref.org/documentation/retrieve-metadata/rest-api/",
-      "description": "Search published scholarly literature by topic, title or author and get back titles, authors, journal, publication date and DOI. Covers peer reviewed journal articles, conference papers and preprints across every field.",
+      "description": "Search of published scholarly journal articles, conference papers and preprints by topic, title or author. Returns title, authors, journal, publication date and DOI.",
       "url": "https://api.crossref.org/works?query={query}&rows=3",
-      "input": { "query": "string, a research topic or title" },
-      "sample": { "query": "retrieval augmented generation" },
+      "input": {
+        "query": "string, a research topic or title"
+      },
+      "sample": {
+        "query": "retrieval augmented generation"
+      },
       "probe": "message.items[0].title"
     },
     {
@@ -135,10 +191,14 @@
       "category": "reference",
       "source_api": "openlibrary.org",
       "terms": "https://openlibrary.org/developers/api",
-      "description": "Bibliographic details for a book from its ISBN: title, authors, publisher, publication date and page count. For identifying or citing a physical book you have the barcode or number for.",
+      "description": "Published book record from its ten or thirteen digit ISBN: title, authors, publisher, publication date and page count.",
       "url": "https://openlibrary.org/isbn/{isbn}.json",
-      "input": { "isbn": "10 or 13 digit ISBN" },
-      "sample": { "isbn": "9780140328721" },
+      "input": {
+        "isbn": "10 or 13 digit ISBN"
+      },
+      "sample": {
+        "isbn": "9780140328721"
+      },
       "probe": "title"
     },
     {
@@ -147,10 +207,16 @@
       "category": "software",
       "source_api": "api.github.com",
       "terms": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
-      "description": "Facts about a public code repository: description, primary language, open source licence, star and fork counts, open issue count and last push date. For checking what a project is and whether it is maintained before depending on it.",
+      "description": "Metadata for a public source-code repository: description, programming language, open-source licence, stars, forks, open issue count and date of last commit.",
       "url": "https://api.github.com/repos/{owner}/{repo}",
-      "input": { "owner": "user or organisation", "repo": "repository name" },
-      "sample": { "owner": "hashicorp", "repo": "terraform" },
+      "input": {
+        "owner": "user or organisation",
+        "repo": "repository name"
+      },
+      "sample": {
+        "owner": "hashicorp",
+        "repo": "terraform"
+      },
       "probe": "license.spdx_id"
     },
     {
@@ -159,10 +225,16 @@
       "category": "finance",
       "source_api": "api.coingecko.com",
       "terms": "https://www.coingecko.com/en/terms",
-      "description": "Current market price of a cryptocurrency quoted in a conventional currency such as dollars, euros or pounds. Returns the live spot rate for coins and tokens by name.",
+      "description": "Market price of a cryptocurrency token such as Bitcoin or Ethereum, quoted in a chosen currency.",
       "url": "https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies={vs}",
-      "input": { "coin": "coin id, e.g. bitcoin", "vs": "fiat currency code" },
-      "sample": { "coin": "bitcoin", "vs": "usd" },
+      "input": {
+        "coin": "coin id, e.g. bitcoin",
+        "vs": "fiat currency code"
+      },
+      "sample": {
+        "coin": "bitcoin",
+        "vs": "usd"
+      },
       "probe": "bitcoin"
     },
     {
@@ -171,10 +243,16 @@
       "category": "statistics",
       "source_api": "api.worldbank.org",
       "terms": "https://datahelpdesk.worldbank.org/knowledgebase/articles/889386",
-      "description": "Official national statistics for a country over time: population, GDP, life expectancy, literacy, electricity access and hundreds of other development indicators, each as a dated series of values.",
+      "description": "National statistics for a country over time: population, gross domestic product, life expectancy, literacy rate and electricity access, as dated series.",
       "url": "https://api.worldbank.org/v2/country/{country}/indicator/{indicator}?format=json&per_page=3",
-      "input": { "country": "ISO country code", "indicator": "World Bank indicator code" },
-      "sample": { "country": "GH", "indicator": "SP.POP.TOTL" },
+      "input": {
+        "country": "ISO country code",
+        "indicator": "World Bank indicator code"
+      },
+      "sample": {
+        "country": "GH",
+        "indicator": "SP.POP.TOTL"
+      },
       "probe": "[1][0].value"
     },
     {
@@ -183,10 +261,14 @@
       "category": "calendar",
       "source_api": "timeapi.io",
       "terms": "https://timeapi.io/",
-      "description": "What time it is right now in a named timezone, with the date, day of week and UTC offset. For working out whether it is business hours somewhere, or converting a meeting time between places.",
+      "description": "Current wall-clock time in a named IANA timezone, with the date, weekday and UTC offset.",
       "url": "https://timeapi.io/api/Time/current/zone?timeZone={zone}",
-      "input": { "zone": "IANA timezone, e.g. Africa/Accra" },
-      "sample": { "zone": "Africa/Accra" },
+      "input": {
+        "zone": "IANA timezone, e.g. Africa/Accra"
+      },
+      "sample": {
+        "zone": "Africa/Accra"
+      },
       "probe": "dateTime"
     },
     {
@@ -195,10 +277,16 @@
       "category": "media",
       "source_api": "api.qrserver.com",
       "terms": "https://goqr.me/api/",
-      "description": "Produce a scannable QR code image encoding a link, plain text, phone number or contact details, at a chosen pixel size. Returns a PNG image rather than JSON.",
+      "description": "Generates a scannable QR barcode image encoding a link, text, phone number or contact card, at a chosen pixel size.",
       "url": "https://api.qrserver.com/v1/create-qr-code/?data={data}&size={size}",
-      "input": { "data": "text or URL to encode", "size": "e.g. 200x200" },
-      "sample": { "data": "https://example.com", "size": "200x200" },
+      "input": {
+        "data": "text or URL to encode",
+        "size": "e.g. 200x200"
+      },
+      "sample": {
+        "data": "https://example.com",
+        "size": "200x200"
+      },
       "probe": "__binary__"
     },
     {
@@ -207,7 +295,7 @@
       "category": "network",
       "source_api": "api.ipify.org",
       "terms": "https://www.ipify.org/",
-      "description": "The public internet address the request appears to come from. For confirming which egress address a machine is using, or what a remote service will see as the source.",
+      "description": "The caller's own outbound public IP address as seen by an internet server.",
       "url": "https://api.ipify.org?format=json",
       "input": {},
       "sample": {},
@@ -219,10 +307,16 @@
       "category": "science",
       "source_api": "earthquake.usgs.gov",
       "terms": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
-      "description": "Seismic events recorded worldwide, filtered by magnitude and recency, each with magnitude, depth, time and a named location. For checking whether a quake has just happened somewhere and how strong it was.",
+      "description": "Earthquakes recorded worldwide, filtered by minimum magnitude and recency, with magnitude, depth, origin time and epicentre place name.",
       "url": "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limit={limit}&minmagnitude={minmag}",
-      "input": { "limit": "max results", "minmag": "minimum magnitude" },
-      "sample": { "limit": 5, "minmag": 4.5 },
+      "input": {
+        "limit": "max results",
+        "minmag": "minimum magnitude"
+      },
+      "sample": {
+        "limit": 5,
+        "minmag": 4.5
+      },
       "probe": "features[0].properties.place"
     },
     {
@@ -231,11 +325,16 @@
       "category": "health",
       "source_api": "world.openfoodfacts.org",
       "terms": "https://world.openfoodfacts.org/terms-of-use",
-      "description": "Nutrition facts for a packaged grocery item looked up by its barcode: energy, fat, sugar, salt, protein and ingredients as printed on the label. For reading what is actually in a supermarket product.",
+      "description": "Nutrition label values for a packaged grocery product identified by its EAN or UPC barcode: energy, fat, sugar, salt, protein and ingredients.",
       "url": "https://world.openfoodfacts.org/api/v2/product/{barcode}.json?fields=product_name,nutriments,ingredients_text",
-      "input": { "barcode": "EAN or UPC barcode digits" },
-      "sample": { "barcode": "737628064502" },
+      "input": {
+        "barcode": "EAN or UPC barcode digits"
+      },
+      "sample": {
+        "barcode": "737628064502"
+      },
       "probe": "product.product_name"
     }
-  ]
+  ],
+  "rewrite_note": "v3: short, concrete, POSITIVE-ONLY descriptions. v2 added boundary clauses of the form 'not X' and recall got WORSE: recall@1 fell 90.9 to 81.8 and the no-answer maximum rose 0.2721 to 0.3632. Embeddings carry no representation of negation, so 'does not look up the owner or country of another address' injected exactly that vocabulary and pulled public-ip-lookup TOWARD such queries, by +0.1331. Qualifier clauses also diluted the core signal: wikipedia-summary on a history query collapsed from 0.2994 to 0.0890. v3 therefore differentiates by being specific about what a tool DOES and never names the neighbouring capability it is being distinguished from."
 }

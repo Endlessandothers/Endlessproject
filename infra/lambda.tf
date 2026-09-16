@@ -10,6 +10,7 @@ locals {
     EMBED_MODEL_ID = var.embed_model_id
     EMBED_DIMS     = tostring(var.embed_dims)
     THRESHOLD_T    = tostring(var.threshold_t)
+    CACHE_TTL_MS   = tostring(var.cache_ttl_ms)
   }
 }
 

@@ -114,3 +114,16 @@ variable "log_retention_days" {
   type        = number
   default     = 14
 }
+
+variable "cache_ttl_ms" {
+  description = <<-EOT
+    How long search-fn may serve tool vectors from its in-memory cache.
+
+    An unbounded cache makes a newly registered tool invisible until the Lambda
+    execution environment happens to recycle. That is unobservable from outside
+    and it silently invalidated an evaluation run: two different description
+    sets produced byte-identical scores because the second was never loaded.
+  EOT
+  type        = number
+  default     = 60000
+}
