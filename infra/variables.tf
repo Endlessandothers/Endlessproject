@@ -51,9 +51,14 @@ variable "threshold_t" {
     0.0464 for an unrelated one. If the eval harness confirms that overlap at scale,
     then cosine distance alone cannot separate a gap from a miss - and per the deck,
     that is itself the finding, not a failure.
+
+    SET TO 0.20 on 2026-09-16, derived from the score distributions at
+    fusion_alpha 0.8 rather than guessed: it is the highest threshold that still
+    logs zero false gaps, and it detects 89.8% of genuine ones. This is issue
+    #12 done — T is now an output of the evaluation, as intended.
   EOT
   type        = number
-  default     = 0.05
+  default     = 0.20
 }
 
 variable "table_rcu" {
@@ -136,7 +141,15 @@ variable "fusion_alpha" {
     returns both component scores on every result, so the weight is chosen by
     sweeping real evaluation data offline rather than by guessing here and
     redeploying once per experiment.
+
+    SET TO 0.8 on 2026-09-16 by sweeping the 60-query evaluation set offline.
+    Pure cosine (1.0) reached only 67.3% gap detection at zero false gaps; 0.8
+    reaches 89.8%. Recall@1 is 100% across the whole sweep, so the lexical
+    component is buying gap detection, not retrieval.
+
+    CAVEAT: alpha and threshold_t were chosen on the same 60 queries they are
+    measured against. These are fitted parameters, not a held-out result.
   EOT
   type        = number
-  default     = 1
+  default     = 0.8
 }
