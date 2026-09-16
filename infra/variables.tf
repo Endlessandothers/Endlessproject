@@ -127,3 +127,16 @@ variable "cache_ttl_ms" {
   type        = number
   default     = 60000
 }
+
+variable "fusion_alpha" {
+  description = <<-EOT
+    Weight between dense and lexical retrieval: 1 is pure cosine, 0 is pure BM25.
+
+    Defaults to 1 so deploying hybrid retrieval changes no behaviour. Search
+    returns both component scores on every result, so the weight is chosen by
+    sweeping real evaluation data offline rather than by guessing here and
+    redeploying once per experiment.
+  EOT
+  type        = number
+  default     = 1
+}

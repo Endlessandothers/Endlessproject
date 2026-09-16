@@ -11,6 +11,7 @@ locals {
     EMBED_DIMS     = tostring(var.embed_dims)
     THRESHOLD_T    = tostring(var.threshold_t)
     CACHE_TTL_MS   = tostring(var.cache_ttl_ms)
+    FUSION_ALPHA   = tostring(var.fusion_alpha)
   }
 }
 

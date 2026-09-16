@@ -10,6 +10,7 @@ import { DynamoDBDocumentClient, ScanCommand, PutCommand } from "@aws-sdk/lib-dy
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { randomUUID } from "node:crypto";
 import { unpackVector, cosine } from "./vector.mjs";
+import { buildIndex, bm25, saturate, fuse } from "./lexical.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({});
@@ -20,6 +21,8 @@ const GAPS = process.env.GAPS_TABLE;
 const MODEL = process.env.EMBED_MODEL_ID;
 const DIMS = Number(process.env.EMBED_DIMS || 1024);
 const THRESHOLD_T = Number(process.env.THRESHOLD_T || 0.5);
+// 1 = pure cosine, 0 = pure lexical.
+const FUSION_ALPHA = Number(process.env.FUSION_ALPHA ?? 1);
 
 // Cache survives warm invocations. This is what makes brute force viable.
 //
@@ -30,6 +33,7 @@ const THRESHOLD_T = Number(process.env.THRESHOLD_T || 0.5);
 // description sets produced byte-identical scores because the second was never
 // loaded.
 let toolCache = null;
+let lexIndex = null;
 let toolCacheAt = 0;
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 60000);
 
@@ -74,16 +78,35 @@ async function loadTools() {
     description: t.description,
     vector: unpackVector(t.vec_b64),
   }));
+
+  // Rebuilt from the same rows in the same pass, so the lexical index can never
+  // drift out of step with the vectors it sits beside.
+  lexIndex = buildIndex(
+    toolCache.map((t) => ({ id: t.tool_id, text: `${t.name} ${t.description}` })),
+  );
   return toolCache;
 }
 
-async function rankTools(queryVector, k) {
+// Hybrid retrieval. Dense cosine finds paraphrase; BM25 finds the rare exact
+// token that a dense vector smears into its neighbourhood — ISBN, cron, kWh.
+//
+// Every result carries BOTH component scores as well as the fused one. That is
+// deliberate: the fusion weight can then be swept offline against real
+// evaluation data instead of being guessed at here and redeployed per
+// experiment.
+async function rankTools(queryVector, queryText, k) {
   const tools = await loadTools();
   return tools
-    .map((t) => ({
-      tool_id: t.tool_id, version: t.version, name: t.name,
-      score: cosine(queryVector, t.vector),
-    }))
+    .map((t) => {
+      const dense = cosine(queryVector, t.vector);
+      const lexical = saturate(bm25(lexIndex, queryText, t.tool_id));
+      return {
+        tool_id: t.tool_id, version: t.version, name: t.name,
+        score: fuse(dense, lexical, FUSION_ALPHA),
+        cosine: dense,
+        lexical,
+      };
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
 }
@@ -108,7 +131,7 @@ export const handler = async (event) => {
     }
 
     const { vector, tokens } = await embed(query);
-    const results = await rankTools(vector, k);
+    const results = await rankTools(vector, query, k);
     const top = results[0]?.score ?? 0;
 
     const ts = new Date().toISOString();
@@ -146,7 +169,7 @@ export const handler = async (event) => {
     console.log(JSON.stringify({ metric: "embed_tokens", tokens, op: "search" }));
 
     return json(200, {
-      query, results, threshold_t: THRESHOLD_T,
+      query, results, threshold_t: THRESHOLD_T, fusion_alpha: FUSION_ALPHA,
       gap_logged: gap_id !== null, gap_id,
     });
   } catch (err) {

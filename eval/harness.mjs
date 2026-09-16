@@ -20,7 +20,9 @@ import { tmpdir } from "node:os";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FN = "endless-p0-search";
 const REGION = "us-east-1";
-const K = 3;
+// Ask for the whole corpus, not just the top 3. An offline fusion sweep has to
+// be able to re-rank every tool, and a truncated list silently caps it.
+const K = 19;
 
 const queriesDoc = JSON.parse(readFileSync(join(HERE, "queries.json"), "utf8"));
 const labelsDoc = JSON.parse(readFileSync(join(HERE, "labels.json"), "utf8"));
@@ -78,6 +80,8 @@ for (const q of queriesDoc.queries) {
     top: ranked[0] ?? null,
     top_score: res.results[0]?.score ?? null,
     ranked, scores: res.results.map((r) => r.score),
+    components: res.results.map((r) => ({ tool_id: r.tool_id, cosine: r.cosine, lexical: r.lexical })),
+    fusion_alpha: res.fusion_alpha,
     gap_logged: res.gap_logged, threshold_t: res.threshold_t,
   });
   process.stdout.write(".");
@@ -92,7 +96,7 @@ function metrics(subset) {
   const answerable = subset.filter((r) => r.expect);
   const unanswerable = subset.filter((r) => !r.expect);
   const hit1 = answerable.filter((r) => r.top === r.expect).length;
-  const hit3 = answerable.filter((r) => r.ranked.includes(r.expect)).length;
+  const hit3 = answerable.filter((r) => r.ranked.slice(0, 3).includes(r.expect)).length;
   // A false gap: a tool existed, and the system logged a gap anyway.
   const falseGap = answerable.filter((r) => r.gap_logged).length;
   // Gap detection: nothing could answer, and the system said so.
