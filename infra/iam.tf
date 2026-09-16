@@ -118,6 +118,14 @@ data "aws_iam_policy_document" "search" {
     resources = [local.embed_model_arn]
   }
 
+  # The gap adjudicator. Scoped to the one model it is allowed to call, so a
+  # code change cannot quietly start invoking something larger and pricier.
+  statement {
+    sid       = "AdjudicateGaps"
+    actions   = ["bedrock:InvokeModel"]
+    resources = [local.judge_model_arn]
+  }
+
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]

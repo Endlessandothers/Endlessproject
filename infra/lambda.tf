@@ -7,11 +7,13 @@ locals {
     # 15-20 tools a cold-start scan is cheaper than maintaining a second copy.
     # A snapshot cache becomes a real decision when the corpus outgrows a scan,
     # which is a Phase 1 problem with Phase 0 data in hand.
-    EMBED_MODEL_ID = var.embed_model_id
-    EMBED_DIMS     = tostring(var.embed_dims)
-    THRESHOLD_T    = tostring(var.threshold_t)
-    CACHE_TTL_MS   = tostring(var.cache_ttl_ms)
-    FUSION_ALPHA   = tostring(var.fusion_alpha)
+    EMBED_MODEL_ID   = var.embed_model_id
+    EMBED_DIMS       = tostring(var.embed_dims)
+    THRESHOLD_T      = tostring(var.threshold_t)
+    CACHE_TTL_MS     = tostring(var.cache_ttl_ms)
+    FUSION_ALPHA     = tostring(var.fusion_alpha)
+    JUDGE_MODEL_ID   = var.judge_model_id
+    JUDGE_CANDIDATES = tostring(var.judge_candidates)
   }
 }
 

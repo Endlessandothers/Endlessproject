@@ -153,3 +153,27 @@ variable "fusion_alpha" {
   type        = number
   default     = 0.8
 }
+
+variable "judge_model_id" {
+  description = <<-EOT
+    Small model that decides whether anything in the shortlist actually does the
+    job. Set to "" to disable and fall back to the threshold alone.
+
+    An absolute threshold could not make this call: on a held-out set it logged
+    31.6% of answerable queries as gaps, because correct-hit scores ran 0.21 and
+    up on one set and as low as 0.12 on the next. Retrieval was never the
+    problem — recall@3 was 100% on both sets, and in every false gap the right
+    tool was already in the top three.
+
+    So the ranking is untouched and only the yes/no changed. This is the
+    "mini LLM at the edge" from PROJECT.md.
+  EOT
+  type        = string
+  default     = "amazon.nova-micro-v1:0"
+}
+
+variable "judge_candidates" {
+  description = "How many ranked tools the judge is shown. Three, because recall@3 is 100% on both evaluation sets — a longer list adds tokens and hallucination surface without adding a right answer."
+  type        = number
+  default     = 3
+}

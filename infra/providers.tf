@@ -20,4 +20,5 @@ locals {
 
   # Bedrock foundation models are account-agnostic ARNs (no account field).
   embed_model_arn = "arn:aws:bedrock:${var.region}::foundation-model/${var.embed_model_id}"
+  judge_model_arn = "arn:aws:bedrock:${var.region}::foundation-model/${var.judge_model_id}"
 }

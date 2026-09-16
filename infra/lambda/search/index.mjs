@@ -11,6 +11,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 import { randomUUID } from "node:crypto";
 import { unpackVector, cosine } from "./vector.mjs";
 import { buildIndex, bm25, saturate, fuse } from "./lexical.mjs";
+import { buildBody, parseVerdict, extractText, extractUsage } from "./judge.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({});
@@ -23,6 +24,8 @@ const DIMS = Number(process.env.EMBED_DIMS || 1024);
 const THRESHOLD_T = Number(process.env.THRESHOLD_T || 0.5);
 // 1 = pure cosine, 0 = pure lexical.
 const FUSION_ALPHA = Number(process.env.FUSION_ALPHA ?? 1);
+const JUDGE_MODEL_ID = process.env.JUDGE_MODEL_ID || "";
+const JUDGE_CANDIDATES = Number(process.env.JUDGE_CANDIDATES || 3);
 
 // Cache survives warm invocations. This is what makes brute force viable.
 //
@@ -102,6 +105,7 @@ async function rankTools(queryVector, queryText, k) {
       const lexical = saturate(bm25(lexIndex, queryText, t.tool_id));
       return {
         tool_id: t.tool_id, version: t.version, name: t.name,
+        description: t.description,
         score: fuse(dense, lexical, FUSION_ALPHA),
         cosine: dense,
         lexical,
@@ -109,6 +113,34 @@ async function rankTools(queryVector, queryText, k) {
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
+}
+
+// Ask the mini model whether anything in the shortlist actually does the job.
+//
+// Fails OPEN, deliberately: if the model errors, times out or returns something
+// unparseable, fall back to the threshold rather than dropping the gap decision
+// entirely. A Bedrock outage should degrade gap quality, not break search.
+async function adjudicate(query, results) {
+  if (!JUDGE_MODEL_ID) return { used: false };
+  const candidates = results.slice(0, JUDGE_CANDIDATES);
+  if (candidates.length === 0) return { used: false };
+  try {
+    const res = await bedrock.send(new InvokeModelCommand({
+      modelId: JUDGE_MODEL_ID,
+      contentType: "application/json",
+      accept: "application/json",
+      body: JSON.stringify(buildBody(query, candidates)),
+    }));
+    const parsed = JSON.parse(new TextDecoder().decode(res.body));
+    const verdict = parseVerdict(extractText(parsed), candidates.map((c) => c.tool_id));
+    const usage = extractUsage(parsed);
+    console.log(JSON.stringify({ metric: "judge_tokens", ...usage, verdict: verdict.reason }));
+    if (!verdict.ok) return { used: false, error: verdict.reason };
+    return { used: true, tool_id: verdict.tool_id };
+  } catch (err) {
+    console.error(JSON.stringify({ metric: "judge_error", message: String(err.message).slice(0, 160) }));
+    return { used: false, error: "invoke failed" };
+  }
 }
 
 export const handler = async (event) => {
@@ -150,15 +182,22 @@ export const handler = async (event) => {
     // result. The full top-k and the T in force are both stored, so a later
     // reader can judge "search failed" against "the tool does not exist" — and
     // so moving T never silently reinterprets old records.
-    let gap_id = null;
+    // The gap decision. The judge replaces the threshold when it is configured
+    // and answered; the threshold remains the fallback so a model failure
+    // degrades the decision instead of removing it.
+    const verdict = await adjudicate(query, results);
     const rejected = body.rejected === true;
-    if (top < THRESHOLD_T || rejected) {
+    const isGap = verdict.used ? verdict.tool_id === null : top < THRESHOLD_T;
+
+    let gap_id = null;
+    if (isGap || rejected) {
       gap_id = randomUUID();
       await ddb.send(new PutCommand({
         TableName: GAPS,
         Item: {
           gap_id, ts, day, query, actor,
-          reason: rejected ? "rejected" : "below_threshold",
+          reason: rejected ? "rejected" : (verdict.used ? "judged_no_fit" : "below_threshold"),
+          decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
           threshold_t: THRESHOLD_T,
           top_k: results,
           embed_model: MODEL,
@@ -170,6 +209,8 @@ export const handler = async (event) => {
 
     return json(200, {
       query, results, threshold_t: THRESHOLD_T, fusion_alpha: FUSION_ALPHA,
+      decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
+      judge_error: verdict.error ?? null,
       gap_logged: gap_id !== null, gap_id,
     });
   } catch (err) {
