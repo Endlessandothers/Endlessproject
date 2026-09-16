@@ -1,0 +1,371 @@
+{
+  "version": 1,
+  "labelled_at": "2026-09-16",
+  "issue": "held-out labels \u2014 parameter generalisation check",
+  "queries_sha256": "c4b388822a582c820773639e49996e79fa42076fbf5fbb8a110942fa138f8fbb",
+  "corpus": "tools/catalog.json v3, 19 tools",
+  "method": "Balanced by design: h001-h019 target one tool each, h020-h060 are tasks no tool in the corpus can serve. Labelled at authoring time because this set is explicitly not blind to the corpus \u2014 pretending otherwise would be theatre.",
+  "commitment": "Scored with fusion_alpha and threshold_t exactly as deployed. No parameter is changed after seeing these results. If the numbers fall, they fall.",
+  "labels": [
+    {
+      "id": "h001",
+      "expect": "recent-earthquakes",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h002",
+      "expect": "currency-convert",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h003",
+      "expect": "worldbank-indicator",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h004",
+      "expect": "geocode-address",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h005",
+      "expect": "reverse-geocode",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h006",
+      "expect": "public-holidays",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h007",
+      "expect": "sunrise-sunset",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h008",
+      "expect": "elevation-lookup",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h009",
+      "expect": "postal-code-lookup",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h010",
+      "expect": "crossref-paper-search",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h011",
+      "expect": "book-by-isbn",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h012",
+      "expect": "github-repo-info",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h013",
+      "expect": "crypto-spot-price",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h014",
+      "expect": "current-time-in-zone",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h015",
+      "expect": "qr-code-generate",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h016",
+      "expect": "public-ip-lookup",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h017",
+      "expect": "food-product-nutrition",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h018",
+      "expect": "wikipedia-summary",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h019",
+      "expect": "weather-forecast",
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h020",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h021",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h022",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h023",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h024",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h025",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h026",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h027",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h028",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h029",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h030",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h031",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h032",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h033",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h034",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h035",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h036",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h037",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h038",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h039",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h040",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h041",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h042",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h043",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h044",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h045",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h046",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h047",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h048",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h049",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h050",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h051",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h052",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h053",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h054",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h055",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h056",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h057",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h058",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h059",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    },
+    {
+      "id": "h060",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": false
+    }
+  ]
+}

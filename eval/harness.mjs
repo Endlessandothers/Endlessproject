@@ -24,8 +24,11 @@ const REGION = "us-east-1";
 // be able to re-rank every tool, and a truncated list silently caps it.
 const K = 19;
 
-const queriesDoc = JSON.parse(readFileSync(join(HERE, "queries.json"), "utf8"));
-const labelsDoc = JSON.parse(readFileSync(join(HERE, "labels.json"), "utf8"));
+// --set=holdout runs eval/holdout-queries.json against eval/holdout-labels.json.
+const setArg = process.argv.find((a) => a.startsWith("--set="));
+const SET = setArg ? `${setArg.split("=")[1]}-` : "";
+const queriesDoc = JSON.parse(readFileSync(join(HERE, `${SET}queries.json`), "utf8"));
+const labelsDoc = JSON.parse(readFileSync(join(HERE, `${SET}labels.json`), "utf8"));
 
 // The freeze is enforced, not trusted. If a query was edited after labelling,
 // every number below would be measuring a different set than the one labelled.
@@ -142,7 +145,7 @@ console.log(`  overlap: ${overlap ? "YES — no single threshold separates them 
 const outDir = join(HERE, "results");
 if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-const out = join(outDir, `${stamp}.json`);
+const out = join(outDir, `${SET}${stamp}.json`);
 writeFileSync(out, JSON.stringify({
   ran_at: new Date().toISOString(), queries_sha256: sha,
   corpus: labelsDoc.corpus, k: K, metrics: { all, excluding_contaminated: clean },
