@@ -8,9 +8,12 @@ Terraform for the Phase 0 stack, plus the GitHub Actions pipeline that manages i
 infra/
   bootstrap/      OIDC provider + the two CI roles.   Applied BY A HUMAN, locally.
   lambda/         Function source. Each directory is zipped as one package.
-    registry/       index.mjs + vector.mjs (packVector)
-    search/         index.mjs + vector.mjs (unpackVector, cosine)
+    registry/       index.mjs + vector.mjs (packVector) + auth.mjs
+    search/         index.mjs + vector.mjs (unpackVector, cosine) + auth.mjs
     events/         index.mjs
+    exec/           index.mjs + auth.mjs      orchestrates a tool call
+    fetcher/        the only component allowed to open a connection
+    runtime/        the sandbox: no network, no role, no disk
   tests/          Pure unit tests. No AWS SDK, no credentials, no network.
   *.tf            The Phase 0 stack.                  Applied BY CI, from main.
 ```
@@ -90,12 +93,48 @@ cd infra && terraform init && terraform plan
 node --test $(find infra/tests -name '*.test.mjs')
 ```
 
+## Callers and API keys
+
+Every call to search, exec and registry needs an Endless API key in the
+`Authorization` header, on top of the SigV4 the Function URL already requires.
+Without one there is no verified identity, and a gap count computed from claimed
+identity counts claims.
+
+```bash
+# mint a caller — run by a human, from real credentials
+node cli/mint-caller.mjs <caller_id> --owner <who is accountable> --credits 100
+
+export ENDLESS_API_KEY=elk_<caller_id>_<secret>
+```
+
+The key is `elk_<caller_id>_<secret>`. The caller id is carried in the key so
+verification is a single GetItem on the primary key — no secondary index, no
+extra capacity. Only a SHA-256 of the key is stored, so a dump of the callers
+table yields nothing usable and a lost key is replaced, never recovered.
+
+**No Lambda can mint a caller.** `PutItem` on the callers table is granted to no
+function, so no compromise of any function can issue itself an identity or top up
+a balance. Only `registry-fn` may write there at all, and only `UpdateItem`, to
+debit a publication.
+
+| Field | Meaning |
+|---|---|
+| `status` | `active`, or anything else — any non-active value is refused on the next request, with no cache to wait out |
+| `credits` | Spent by **publishing a tool version**, never by searching or calling |
+| `owner` | Who is accountable. Decides tool ownership, self-call exclusion and bounty eligibility, and cannot be set from a request |
+| `publications` | Count of versions published, incremented with the debit |
+
+**Searching and calling are free; publishing costs credits.** The fee sits where
+supply enters the world, because charging for questions would suppress exactly
+the gap signal the registry exists to collect.
+
 ## Things that will bite you
 
 **DynamoDB capacity is shared.** The always-free 25 RCU / 25 WCU covers every
 table *and every index* in the region, and applies to **provisioned mode only** —
-on-demand is not in the free tier. Current usage: 21/21 of 25. Adding an index
-at default capacity would exceed it.
+on-demand is not in the free tier. Current usage: 23/23 of 25 — the callers table
+took the last comfortable slot. Adding an index at default capacity would exceed
+it, and the next table needs capacity taken from something already here.
 
 **Titan V2 cosine scores sit near zero.** Not the 0.4–0.8 typical of other
 embedding models. Measured: a correct hit scored 0.0595, unrelated tools −0.007

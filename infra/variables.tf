@@ -73,6 +73,24 @@ variable "table_wcu" {
   default     = 5
 }
 
+variable "callers_rcu" {
+  description = "Read capacity for the callers table. Read once per search and once per tool call, as an eventually consistent GetItem at 0.5 RCU, so 2 sustains about 4/sec against an account concurrency ceiling of 10. Raise this first if throttling appears."
+  type        = number
+  default     = 2
+}
+
+variable "callers_wcu" {
+  description = "Write capacity for the callers table. Written only when a caller is minted and when a publication is charged, both rare, so this is deliberately the smallest allocation in the region."
+  type        = number
+  default     = 2
+}
+
+variable "publish_cost_credits" {
+  description = "Credits debited from the publishing caller for each tool VERSION accepted by registry-fn. Charged per version rather than per tool because each version is a separate immutable object that costs its own embedding and its own review. Whether this is a fee or a refundable stake is not decided yet; a stake is this same debit with a later credit back, so the mechanism does not change."
+  type        = number
+  default     = 1
+}
+
 variable "gsi_rcu" {
   description = "Read capacity per global secondary index."
   type        = number

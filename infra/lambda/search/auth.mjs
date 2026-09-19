@@ -3,10 +3,10 @@
 // Pure functions: no AWS imports, so the key format and the verification rules
 // are testable without credentials and without a table.
 //
-// DUPLICATED, DELIBERATELY. An identical copy lives in ../search/auth.mjs
-// because exec-fn and search-fn ship as separate zips and cannot import across
-// package boundaries. infra/tests/auth.test.mjs asserts the two files are byte
-// identical, so they cannot drift apart unnoticed.
+// DUPLICATED, DELIBERATELY. Identical copies live in ../search/auth.mjs and
+// ../registry/auth.mjs, because each function ships as its own zip and cannot
+// import across package boundaries. infra/tests/auth.test.mjs asserts all three
+// files are byte identical, so they cannot drift apart unnoticed.
 //
 // KEY FORMAT
 //
@@ -77,6 +77,46 @@ export function authorise(callerRow, cost) {
     return { ok: false, status: 402, error: `insufficient credits: ${credits} left, ${cost} required` };
   }
   return { ok: true, credits_before: credits };
+}
+
+// Identify the caller behind a request: header -> key -> stored hash.
+//
+// `lookup` is injected rather than imported, so this module keeps no AWS
+// dependency and the whole verification path is testable without credentials.
+// Each function passes its own GetItem against the callers table.
+//
+// EVERY failure returns the same 401 and the same message. An unknown caller id
+// and a wrong secret are indistinguishable from outside, so this cannot be used
+// to enumerate which callers exist. The distinctions that ARE safe to expose —
+// suspended, out of credit — come from authorise(), which only runs once the
+// caller has already proved who they are.
+export async function authenticate(headers, lookup) {
+  const key = bearerFrom(headers);
+  const parsed = key && parseKey(key);
+  if (!parsed) return { ok: false, status: 401, error: "missing or malformed api key" };
+
+  const row = await lookup(parsed.caller_id);
+  if (!row || !keyMatches(key, row.key_hash)) {
+    return { ok: false, status: 401, error: "missing or malformed api key" };
+  }
+  return { ok: true, caller: row };
+}
+
+// What goes on an event or gap row to record WHO, once authenticate() has
+// succeeded. Never built from request fields.
+//
+// caller_created_at travels with the record because caller age is one of the
+// signals that separates real demand from manufactured demand, and a caller row
+// can be deleted long before the gaps it produced are analysed. See
+// docs/phase-1-gap-clustering.md.
+export function provenanceOf(caller, actor) {
+  return {
+    caller_id: caller.caller_id,
+    owner: caller.owner ?? null,
+    caller_created_at: caller.created_at ?? null,
+    actor_verified: true,
+    actor: actor ?? null,
+  };
 }
 
 // A call by a tool's own owner is not demand, and must never count toward mass.

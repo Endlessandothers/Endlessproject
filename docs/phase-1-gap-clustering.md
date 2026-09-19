@@ -87,27 +87,37 @@ the cost sits on **becoming able to supply and to benefit**, not on asking.
 The goal is not prevention. It is making the cost of faking demand exceed the
 payoff, and keeping enough provenance that faking is visible afterwards.
 
-## Data prerequisite — blocks the build
+## Data prerequisite — satisfied 2026-09-19
 
-Gap rows today carry `actor` only, which is an **unverified caller claim**
-(`search/index.mjs`, the `GAPS` put). Clustering on that would count whatever a
-caller types in a JSON field, which is not a defence against anything.
+Clustering needs verified identity on every row, because clustering on a claimed
+identity counts whatever a caller types in a JSON field.
 
-Before #8 is built, #1 must land so that every gap row carries:
+Issue #1 landed and every gap and event row now carries:
 
-- `caller_id` — verified against the stored key hash, not claimed
-- `owner` — the accountable party behind that caller, for beneficiary exclusion
-- `caller_created_at` — or enough to recover it, for the caller-age signal
-- `actor_verified: true` — explicitly, as `exec-fn` already records the false case
+- `caller_id` — proved against the stored key hash, not claimed
+- `owner` — the accountable party, for beneficiary exclusion
+- `caller_created_at` — copied onto the row, for the caller-age signal
+- `actor_verified: true` — explicitly
 
-`auth.mjs` and its tests exist; neither handler imports them yet and there is no
-callers table. That is the actual blocker, and it is on the critical path for
-this design rather than adjacent to it.
+`actor` survives alongside them as the caller's own sub-identity: which of its
+agents and which session asked. It is still useful and still unverified, and no
+count is ever taken from it.
 
-**Do not backfill.** Gaps logged before identity was enforced are unverified and
-should stay marked that way, and be excluded from distinct-caller counts. A
-number that silently mixes verified and claimed callers is worse than a smaller
+**Do not backfill.** Rows written before 2026-09-19 carry `actor_verified: false`
+or no caller at all. They stay that way and stay outside distinct-caller counts.
+A number that silently mixes verified and claimed callers is worse than a smaller
 number that does not.
+
+## Still open — and it is the load-bearing one
+
+Nothing above works if callers are free to create. Minting is currently an
+operator action (`cli/mint-caller.mjs`) with no cost attached, which is fine while
+the operator is the only caller and is **not** fine the moment anyone can sign up.
+
+Deciding what makes a caller costly — verified email or domain, a payment method
+on file, rate-limited issuance, or a stake — is a prerequisite for opening
+registration, not for building the clustering. Build the counting; do not open
+the door until the cost is decided.
 
 ## Deliberately not doing
 

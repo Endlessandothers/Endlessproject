@@ -46,11 +46,21 @@ console.log(`frozen set verified: ${sha.slice(0, 16)}…  n=${queriesDoc.queries
 const labelById = new Map(labelsDoc.labels.map((l) => [l.id, l]));
 const dry = process.argv.includes("--dry");
 
+// search-fn verifies an Endless API key. The harness runs as its own caller so
+// its traffic is separable from real demand in the event log — eval queries are
+// not evidence of an unmet need and must never be counted as any.
+const API_KEY = process.env.ENDLESS_API_KEY || "";
+if (!API_KEY && !dry) {
+  console.error("set ENDLESS_API_KEY — mint one with: node cli/mint-caller.mjs eval-harness --owner <you>");
+  process.exit(2);
+}
+
 function search(query) {
   const event = {
     version: "2.0", rawPath: "/search",
     requestContext: { http: { method: "POST" } },
     isBase64Encoded: false,
+    headers: { authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify({
       query, k: K,
       actor: { agent_id: "eval-harness", session_id: labelsDoc.labelled_at },

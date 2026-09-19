@@ -49,6 +49,22 @@ data "aws_iam_policy_document" "registry" {
     resources = [aws_dynamodb_table.tools.arn]
   }
 
+  # Publishing is the only paid action, so this is the only role that may move
+  # a balance. UpdateItem is scoped to the callers table and paired with a Deny
+  # on removal: a publish path can charge a caller, never delete one.
+  statement {
+    sid       = "ReadAndChargeCallers"
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+    resources = [aws_dynamodb_table.callers.arn]
+  }
+
+  statement {
+    sid       = "DenyCallerRemoval"
+    effect    = "Deny"
+    actions   = ["dynamodb:DeleteItem", "dynamodb:BatchWriteItem", "dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.callers.arn]
+  }
+
   statement {
     sid       = "EmbedToolText"
     actions   = ["bedrock:InvokeModel"]
@@ -110,6 +126,22 @@ data "aws_iam_policy_document" "search" {
       aws_dynamodb_table.gaps.arn,
       "${aws_dynamodb_table.gaps.arn}/index/*",
     ]
+  }
+
+  # Read only. search-fn proves who is asking; it can neither create a caller
+  # nor alter a balance, so a bug in the search path cannot mint identity or
+  # hand out credit.
+  statement {
+    sid       = "ReadCallers"
+    actions   = ["dynamodb:GetItem"]
+    resources = [aws_dynamodb_table.callers.arn]
+  }
+
+  statement {
+    sid       = "DenyCallerWrites"
+    effect    = "Deny"
+    actions   = concat(local.mutating_actions, ["dynamodb:PutItem"])
+    resources = [aws_dynamodb_table.callers.arn]
   }
 
   statement {

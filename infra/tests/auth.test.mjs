@@ -5,16 +5,20 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   mintKey, parseKey, hashKey, keyMatches, bearerFrom, authorise, isSelfCall,
+  authenticate, provenanceOf,
 } from "../lambda/exec/auth.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-// exec-fn and search-fn ship as separate zips and cannot share an import, so
-// auth.mjs is duplicated. This is what stops the two copies drifting.
-test("the two copies of auth.mjs are byte identical", () => {
-  const a = readFileSync(join(HERE, "../lambda/exec/auth.mjs"));
-  const b = readFileSync(join(HERE, "../lambda/search/auth.mjs"));
-  assert.ok(a.equals(b), "exec/auth.mjs and search/auth.mjs have diverged");
+// exec-fn, search-fn and registry-fn ship as separate zips and cannot share an
+// import, so auth.mjs is duplicated. This is what stops the copies drifting.
+test("every copy of auth.mjs is byte identical", () => {
+  const copies = ["exec", "search", "registry"].map((fn) => ({
+    fn, bytes: readFileSync(join(HERE, `../lambda/${fn}/auth.mjs`)),
+  }));
+  for (const c of copies.slice(1)) {
+    assert.ok(copies[0].bytes.equals(c.bytes), `${c.fn}/auth.mjs has diverged from exec/auth.mjs`);
+  }
 });
 
 test("a minted key round-trips and verifies", () => {
@@ -102,4 +106,75 @@ test("a missing owner on either side is not treated as a self call", () => {
   assert.equal(isSelfCall({}, { owner: "erics" }), false);
   assert.equal(isSelfCall({ owner: "erics" }, {}), false);
   assert.equal(isSelfCall(null, null), false);
+});
+
+// ---------------------------------------------------------------- authenticate
+//
+// The lookup is injected, so the whole verification path is exercised here with
+// no table and no credentials.
+const tableOf = (rows) => async (id) => rows[id] ?? null;
+
+test("a valid key authenticates and returns the caller row", async () => {
+  const { key, key_hash } = mintKey("acme-bot");
+  const rows = { "acme-bot": { caller_id: "acme-bot", key_hash, owner: "acme", status: "active" } };
+  const res = await authenticate({ authorization: `Bearer ${key}` }, tableOf(rows));
+  assert.equal(res.ok, true);
+  assert.equal(res.caller.owner, "acme");
+});
+
+test("a missing header, a malformed key and a wrong secret are indistinguishable", async () => {
+  const { key_hash } = mintKey("acme-bot");
+  const lookup = tableOf({ "acme-bot": { caller_id: "acme-bot", key_hash } });
+
+  const results = await Promise.all([
+    authenticate({}, lookup),
+    authenticate({ authorization: "Bearer nonsense" }, lookup),
+    authenticate({ authorization: "Bearer elk_acme-bot_wrongsecret" }, lookup),
+    authenticate({ authorization: `Bearer ${mintKey("ghost").key}` }, lookup),
+  ]);
+
+  // Identical status AND identical message. Anything that distinguished "no such
+  // caller" from "wrong secret" would let an attacker enumerate who exists.
+  for (const r of results) {
+    assert.equal(r.ok, false);
+    assert.equal(r.status, 401);
+    assert.equal(r.error, results[0].error);
+  }
+});
+
+test("a caller id that exists cannot be used with another caller's secret", async () => {
+  const victim = mintKey("victim");
+  const attacker = mintKey("attacker");
+  const lookup = tableOf({
+    victim: { caller_id: "victim", key_hash: victim.key_hash },
+    attacker: { caller_id: "attacker", key_hash: attacker.key_hash },
+  });
+  const forged = `elk_victim_${parseKey(attacker.key).secret}`;
+  assert.equal((await authenticate({ authorization: `Bearer ${forged}` }, lookup)).ok, false);
+});
+
+test("provenance is built from the caller row, never from the request", () => {
+  const caller = {
+    caller_id: "acme-bot", owner: "acme", created_at: "2026-01-01T00:00:00Z",
+  };
+  // A caller claiming to be someone else in the actor field changes nothing
+  // about the identity that gets recorded.
+  const p = provenanceOf(caller, { agent_id: "totally-someone-else", session_id: "s1", owner: "victim" });
+  assert.equal(p.caller_id, "acme-bot");
+  assert.equal(p.owner, "acme");
+  assert.equal(p.caller_created_at, "2026-01-01T00:00:00Z");
+  assert.equal(p.actor_verified, true);
+  assert.equal(p.actor.agent_id, "totally-someone-else");
+});
+
+// caller_created_at is copied onto every record rather than looked up later,
+// because caller age is one of the signals that separates real demand from
+// manufactured demand and a caller row can be deleted before the gaps it
+// produced are ever analysed. See docs/phase-1-gap-clustering.md.
+test("provenance survives a caller row with nothing optional on it", () => {
+  const p = provenanceOf({ caller_id: "bare" }, null);
+  assert.deepEqual(p, {
+    caller_id: "bare", owner: null, caller_created_at: null,
+    actor_verified: true, actor: null,
+  });
 });

@@ -5,8 +5,12 @@
 #
 #   3 tables x 5/5                 = 15 RCU / 15 WCU
 #   2 indexes (events, gaps) x 3/3 =  6 RCU /  6 WCU
+#   callers x 2/2 (callers.tf)     =  2 RCU /  2 WCU
 #                                    ----------------
-#                                    21 RCU / 21 WCU   (inside 25/25)
+#                                    23 RCU / 23 WCU   (inside 25/25)
+#
+# 2 RCU/WCU of headroom left. The next table does not fit without either raising
+# the bill or taking capacity from something here.
 
 # ---------------------------------------------------------------- tools
 # version is the sort key, which is what makes versions immutable: a new version

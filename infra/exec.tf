@@ -53,6 +53,21 @@ data "aws_iam_policy_document" "exec" {
     resources = [aws_dynamodb_table.events.arn, "${aws_dynamodb_table.events.arn}/index/*"]
   }
 
+  # Read only, as with search-fn: exec-fn identifies its caller and records the
+  # result, and calling a tool costs nothing, so it has no reason to write here.
+  statement {
+    sid       = "ReadCallers"
+    actions   = ["dynamodb:GetItem"]
+    resources = [aws_dynamodb_table.callers.arn]
+  }
+
+  statement {
+    sid       = "DenyCallerWrites"
+    effect    = "Deny"
+    actions   = concat(local.mutating_actions, ["dynamodb:PutItem"])
+    resources = [aws_dynamodb_table.callers.arn]
+  }
+
   # Named individually rather than by prefix. exec-fn invoking search-fn or
   # registry-fn would be a confused-deputy path from a caller-supplied payload
   # into a function with more authority than this one.
@@ -95,10 +110,11 @@ resource "aws_lambda_function" "exec" {
 
   environment {
     variables = {
-      TOOLS_TABLE  = aws_dynamodb_table.tools.name
-      EVENTS_TABLE = aws_dynamodb_table.events.name
-      FETCHER_FN   = aws_lambda_function.fetcher.function_name
-      RUNTIME_FN   = aws_lambda_function.runtime.function_name
+      TOOLS_TABLE   = aws_dynamodb_table.tools.name
+      EVENTS_TABLE  = aws_dynamodb_table.events.name
+      FETCHER_FN    = aws_lambda_function.fetcher.function_name
+      RUNTIME_FN    = aws_lambda_function.runtime.function_name
+      CALLERS_TABLE = aws_dynamodb_table.callers.name
     }
   }
 
@@ -111,6 +127,6 @@ resource "aws_lambda_function_url" "exec" {
 }
 
 output "exec_url" {
-  description = "Tool execution endpoint. AWS_IAM auth until caller identity lands in issue #1."
+  description = "Tool execution endpoint. AWS_IAM on the URL, and an Endless API key in the Authorization header on top of it."
   value       = aws_lambda_function_url.exec.function_url
 }

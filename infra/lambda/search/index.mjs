@@ -6,12 +6,13 @@
 // without touching any caller.
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, ScanCommand, PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { randomUUID } from "node:crypto";
 import { unpackVector, cosine } from "./vector.mjs";
 import { buildIndex, bm25, saturate, fuse } from "./lexical.mjs";
 import { buildBody, parseVerdict, extractText, extractUsage } from "./judge.mjs";
+import { authenticate, provenanceOf } from "./auth.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({});
@@ -19,6 +20,7 @@ const bedrock = new BedrockRuntimeClient({});
 const TOOLS = process.env.TOOLS_TABLE;
 const EVENTS = process.env.EVENTS_TABLE;
 const GAPS = process.env.GAPS_TABLE;
+const CALLERS = process.env.CALLERS_TABLE;
 const MODEL = process.env.EMBED_MODEL_ID;
 const DIMS = Number(process.env.EMBED_DIMS || 1024);
 const THRESHOLD_T = Number(process.env.THRESHOLD_T || 0.5);
@@ -45,6 +47,16 @@ const json = (status, body) => ({
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body),
 });
+
+// Deliberately not cached. A suspended caller must stop working at once, and a
+// cached row means suspension takes effect whenever the container happens to
+// recycle. See the note on the table in infra/callers.tf.
+const lookupCaller = async (callerId) => {
+  const out = await ddb.send(new GetCommand({
+    TableName: CALLERS, Key: { caller_id: callerId },
+  }));
+  return out.Item ?? null;
+};
 
 async function embed(text) {
   const res = await bedrock.send(new InvokeModelCommand({
@@ -158,9 +170,31 @@ export const handler = async (event) => {
 
     // Invariant #4: a gap record must always carry which agent/session produced
     // it, so manufactured demand can be traced. No provenance, no write.
+    //
+    // actor is the caller's own sub-identity — which of its agents and sessions
+    // asked. It stays useful and it stays UNVERIFIED. The identity that counts
+    // is the one below, proved against a stored hash.
     if (!actor?.agent_id || !actor?.session_id) {
       return json(400, { error: "actor.agent_id and actor.session_id are required" });
     }
+
+    // Before the embedding, not after.
+    //
+    // A search costs a Titan embedding and, on the gap path, a Nova Micro
+    // adjudication. Authenticating first means an unauthenticated flood is
+    // rejected for the price of one GetItem instead of one model call each.
+    // This is the cheapest of the DDoS mitigations and the reason it runs here
+    // rather than wherever it would read most naturally.
+    const auth = await authenticate(event?.headers, lookupCaller);
+    if (!auth.ok) return json(auth.status, { error: auth.error });
+    if (auth.caller.status !== "active") {
+      return json(403, { error: `caller is ${auth.caller.status}` });
+    }
+
+    // Searching is free. The paywall is on PUBLISHING a tool, not on asking —
+    // charging for questions would suppress exactly the gap signal the registry
+    // exists to collect. registry-fn holds the debit.
+    const provenance = provenanceOf(auth.caller, actor);
 
     const { vector, tokens } = await embed(query);
     const results = await rankTools(vector, query, k);
@@ -173,7 +207,8 @@ export const handler = async (event) => {
       TableName: EVENTS,
       Item: {
         event_id: randomUUID(), ts, day, type: "search",
-        actor, query, top_score: top, result_count: results.length,
+        ...provenance,
+        query, top_score: top, result_count: results.length,
         embed_tokens: tokens, embed_model: MODEL,
       },
     }));
@@ -195,7 +230,7 @@ export const handler = async (event) => {
       await ddb.send(new PutCommand({
         TableName: GAPS,
         Item: {
-          gap_id, ts, day, query, actor,
+          gap_id, ts, day, query, ...provenance,
           reason: rejected ? "rejected" : (verdict.used ? "judged_no_fit" : "below_threshold"),
           decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
           threshold_t: THRESHOLD_T,

@@ -15,6 +15,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { randomUUID } from "node:crypto";
+import { authenticate, provenanceOf, isSelfCall } from "./auth.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
@@ -23,12 +24,22 @@ const TOOLS = process.env.TOOLS_TABLE;
 const EVENTS = process.env.EVENTS_TABLE;
 const FETCHER_FN = process.env.FETCHER_FN;
 const RUNTIME_FN = process.env.RUNTIME_FN;
+const CALLERS = process.env.CALLERS_TABLE;
 
 const json = (status, body) => ({
   statusCode: status,
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body),
 });
+
+// Not cached, for the reason given in infra/callers.tf: a suspended caller has
+// to stop being able to run tools immediately, not eventually.
+const lookupCaller = async (callerId) => {
+  const out = await ddb.send(new GetCommand({
+    TableName: CALLERS, Key: { caller_id: callerId },
+  }));
+  return out.Item ?? null;
+};
 
 async function invoke(fn, payload) {
   const res = await lambda.send(new InvokeCommand({
@@ -96,13 +107,23 @@ export const handler = async (event) => {
   const { tool_id, version = null, input = {}, actor } = body;
   if (!tool_id) return json(400, { error: "missing field: tool_id" });
 
-  // Invariant #4 again. Until caller identity lands in issue #1 the actor is
-  // whatever the caller claims, so the event says so explicitly rather than
-  // letting an unverified claim look like a verified one later.
+  // Invariant #4. actor names which of the caller's agents and sessions asked;
+  // it is a self-declared sub-identity and stays unverified. The identity that
+  // decisions are taken on is the authenticated caller below.
   if (!actor?.agent_id || !actor?.session_id) {
     return json(400, { error: "actor.agent_id and actor.session_id are required" });
   }
-  const provenance = { actor, actor_verified: false };
+
+  // Before resolving the tool or invoking anything, so an unauthenticated
+  // request costs one GetItem rather than a registry read and two Lambdas.
+  const auth = await authenticate(event?.headers, lookupCaller);
+  if (!auth.ok) return json(auth.status, { error: auth.error });
+  if (auth.caller.status !== "active") {
+    return json(403, { error: `caller is ${auth.caller.status}` });
+  }
+
+  // Calling a tool is free. Publishing one is not. See registry/index.mjs.
+  const provenance = provenanceOf(auth.caller, actor);
 
   const fail = async (status, error, extra = {}) => {
     await recordEvent({
@@ -143,6 +164,10 @@ export const handler = async (event) => {
     await recordEvent({
       tool_id, version: tool.version, outcome: "success", ms,
       transform_ms: ran.ms ?? null, ...provenance,
+      // Flagged at write time, not inferred later: ownership on either side can
+      // change, and the log has to stay true to the moment. A call by the tool's
+      // own owner is not demand and must never count toward mass.
+      self_call: isSelfCall(auth.caller, tool),
     });
 
     return json(200, {

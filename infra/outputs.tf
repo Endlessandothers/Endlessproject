@@ -16,19 +16,21 @@ output "events_url" {
 output "tables" {
   description = "DynamoDB table names."
   value = {
-    tools  = aws_dynamodb_table.tools.name
-    events = aws_dynamodb_table.events.name
-    gaps   = aws_dynamodb_table.gaps.name
+    tools   = aws_dynamodb_table.tools.name
+    events  = aws_dynamodb_table.events.name
+    gaps    = aws_dynamodb_table.gaps.name
+    callers = aws_dynamodb_table.callers.name
   }
 }
 
 output "capacity_budget" {
   description = "Provisioned capacity against the always-free 25 RCU / 25 WCU."
   value = format(
-    "%d RCU / %d WCU of 25 (3 tables at %d/%d, 2 indexes at %d/%d)",
-    var.table_rcu * 3 + var.gsi_rcu * 2,
-    var.table_wcu * 3 + var.gsi_wcu * 2,
+    "%d RCU / %d WCU of 25 (3 tables at %d/%d, 2 indexes at %d/%d, callers at %d/%d)",
+    var.table_rcu * 3 + var.gsi_rcu * 2 + var.callers_rcu,
+    var.table_wcu * 3 + var.gsi_wcu * 2 + var.callers_wcu,
     var.table_rcu, var.table_wcu, var.gsi_rcu, var.gsi_wcu,
+    var.callers_rcu, var.callers_wcu,
   )
 }
 

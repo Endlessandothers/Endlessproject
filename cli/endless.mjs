@@ -22,6 +22,11 @@ import { join } from "node:path";
 const REGION = process.env.AWS_REGION || "us-east-1";
 const PREFIX = process.env.ENDLESS_PREFIX || "endless-p0";
 
+// search-fn verifies an Endless API key, so the CLI needs one. Mint yours with
+// cli/mint-caller.mjs. The read commands below go straight to DynamoDB with your
+// AWS credentials and need no key.
+const API_KEY = process.env.ENDLESS_API_KEY || "";
+
 const C = {
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
@@ -81,9 +86,13 @@ const ago = (iso) => {
 // ---------------------------------------------------------------- commands
 function cmdSearch(query) {
   if (!query) return fail('usage: endless search "<query>"');
+  if (!API_KEY) {
+    return fail("set ENDLESS_API_KEY — mint one with: node cli/mint-caller.mjs <id> --owner <you>");
+  }
   const res = invoke("search", {
     version: "2.0", rawPath: "/search",
     requestContext: { http: { method: "POST" } }, isBase64Encoded: false,
+    headers: { authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify({
       query, k: 5,
       actor: { agent_id: "cli", session_id: `cli-${process.pid}` },
@@ -121,7 +130,9 @@ function cmdGaps(id, limit) {
     console.log(`  ${C.dim("logged")}      ${g.ts}  (${ago(g.ts)})`);
     console.log(`  ${C.dim("reason")}      ${g.reason}`);
     console.log(`  ${C.dim("decided by")}  ${g.decided_by || `threshold at ${g.threshold_t}`}`);
-    console.log(`  ${C.dim("agent")}       ${g.actor?.agent_id} / ${g.actor?.session_id}`);
+    const who = g.caller_id ? `${g.caller_id}${g.owner ? ` (${g.owner})` : ""}` : C.yellow("unverified");
+  console.log(`  ${C.dim("caller")}      ${who}`);
+  console.log(`  ${C.dim("agent")}       ${g.actor?.agent_id} / ${g.actor?.session_id}`);
     console.log(`\n  ${C.dim("it looked at and rejected:")}`);
     for (const r of g.top_k || []) {
       console.log(`    ${Number(r.score).toFixed(4)}  ${r.tool_id}@${r.version}`);

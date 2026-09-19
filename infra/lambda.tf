@@ -1,8 +1,10 @@
 locals {
   common_env = {
-    TOOLS_TABLE  = aws_dynamodb_table.tools.name
-    EVENTS_TABLE = aws_dynamodb_table.events.name
-    GAPS_TABLE   = aws_dynamodb_table.gaps.name
+    TOOLS_TABLE          = aws_dynamodb_table.tools.name
+    EVENTS_TABLE         = aws_dynamodb_table.events.name
+    GAPS_TABLE           = aws_dynamodb_table.gaps.name
+    CALLERS_TABLE        = aws_dynamodb_table.callers.name
+    PUBLISH_COST_CREDITS = tostring(var.publish_cost_credits)
     # No VECTORS_BUCKET. Authority for a tool's vector is the tool row, and at
     # 15-20 tools a cold-start scan is cheaper than maintaining a second copy.
     # A snapshot cache becomes a real decision when the corpus outgrows a scan,
