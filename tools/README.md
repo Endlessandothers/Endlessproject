@@ -41,6 +41,23 @@ The second is the instructive one. A status code is not proof an API works, so
 `callTool` checks the response shape for `{success:false}` as well as the code,
 and `verify.mjs` requires the documented probe path to actually resolve.
 
+## Re-seeding after a rebuild
+
+Registration goes through `registry-fn`, which since 2026-09-19 requires an
+Endless API key and debits the publishing caller one credit per version. So a
+re-seed needs a caller with credit, and the tools it creates are owned by that
+caller — `owner` comes from the key and is rejected if set in the request.
+
+```bash
+node cli/mint-caller.mjs <id> --owner <you> --credits 100   # once, if none exists
+export ENDLESS_API_KEY=elk_<id>_<secret>
+```
+
+The 20 rows currently in the registry were seeded before ownership was verified
+and carry `owner: "platform"`. They are left as they are: rewriting a published
+version to correct a field would breach the immutability invariant, and the
+honest record is that those tools predate verified ownership.
+
 ## Effect on the contamination note
 
 Three ids — `weather-forecast`, `currency-convert`, `wikipedia-summary` —
