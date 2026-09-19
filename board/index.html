@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Endless — unmet needs</title>
+<!--
+  The public gaps board. Phase 1, issue #12.
+
+  PROJECT.md calls this a standalone product that is useful before the ecosystem
+  exists, which is why it is worth building before there are many tools to rank.
+  What it shows is not traffic and not popularity: it is things agents asked for
+  and could not get.
+
+  One static file reading one JSON snapshot. No build step, no framework, no API
+  behind it. The snapshot is written nightly by cluster-fn and served through
+  CloudFront, so the board cannot be made slow or expensive by whoever reads it.
+
+  It states its own counting rule on the page, deliberately. A demand figure
+  whose method is hidden is a number you have to take on trust, and the whole
+  argument for this board is that you do not have to.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfbfa;
+    --panel: #fff;
+    --ink: #1a1a18;
+    --dim: #6b6b66;
+    --line: #e6e5e1;
+    --accent: #1f6feb;
+    --confirmed: #1a7f4b;
+    --flag: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --panel: #1e1e24; --ink: #ececf0; --dim: #9a9aa4;
+      --line: #2c2c34; --accent: #6ea8fe; --confirmed: #4ec98a; --flag: #d8a657;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 0 16px env(safe-area-inset-bottom, 0px);
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding-block: 48px 72px; }
+  h1 { font-size: 1.7rem; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .lede { color: var(--dim); margin: 0 0 32px; max-width: 58ch; }
+  .stats { display: flex; flex-wrap: wrap; gap: 20px 32px; padding: 16px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+  .stat b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--dim); font-size: .82rem; }
+  .gap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
+  .gap h2 { font-size: 1.02rem; margin: 0 0 10px; font-weight: 600; }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; vertical-align: 2px; margin-left: 8px; }
+  .is-confirmed { color: var(--confirmed); }
+  .is-open { color: var(--dim); }
+  .metrics { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: .85rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .metrics b { color: var(--ink); font-weight: 600; }
+  .why { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--line); font-size: .85rem; color: var(--dim); }
+  .why.flagged { border-left-color: var(--flag); }
+  .why ul { margin: 4px 0 0; padding-left: 18px; }
+  details { margin-top: 12px; font-size: .86rem; }
+  summary { cursor: pointer; color: var(--accent); }
+  details ul { margin: 8px 0 0; padding-left: 18px; color: var(--dim); }
+  .method { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); font-size: .87rem; color: var(--dim); }
+  .method h3 { color: var(--ink); font-size: .95rem; margin: 0 0 8px; }
+  .method li { margin-bottom: 6px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  .empty { color: var(--dim); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Unmet needs</h1>
+  <p class="lede">
+    Things agents asked Endless for and could not get. Every failed search is
+    logged; these are the ones that repeat across people who do not know each
+    other.
+  </p>
+
+  <div class="stats" id="stats"></div>
+  <div id="list"><p class="empty">Loading…</p></div>
+
+  <div class="method">
+    <h3>How these numbers are counted</h3>
+    <ul>
+      <li><b>Demand is distinct callers, not requests.</b> One caller asking the
+          same thing five hundred ways counts once.</li>
+      <li><b>Needs are grouped by meaning, not wording</b>, so rephrasing a
+          question does not make it look like a second person asking.</li>
+      <li><b>Callers are verified.</b> Only requests carrying a key proved
+          against a stored hash are counted. Anything self-declared is not.</li>
+      <li><b>Distinct owners are counted too</b>, so one person holding ten keys
+          is one voice, not ten.</li>
+      <li><b>Whoever closes a need does not get to have voted for it.</b> Their
+          own requests are removed from the evidence before any reward.</li>
+      <li>Identities are never published. Counts only.</li>
+    </ul>
+    <p id="generated"></p>
+  </div>
+</div>
+
+<script>
+const fmt = (n) => new Intl.NumberFormat().format(n);
+const ago = (iso) => {
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 90) return "just now";
+  if (s < 5400) return `${Math.round(s / 60)} minutes ago`;
+  if (s < 172800) return `${Math.round(s / 3600)} hours ago`;
+  return `${Math.round(s / 86400)} days ago`;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function render(d) {
+  document.getElementById("stats").innerHTML = [
+    [d.clusters_confirmed, "repeated needs"],
+    [d.clusters_total, "distinct needs seen"],
+    [d.gaps_total, "failed searches logged"],
+  ].map(([v, l]) => `<div class="stat"><b>${fmt(v)}</b><span>${l}</span></div>`).join("");
+
+  document.getElementById("generated").textContent =
+    `Recomputed nightly. This snapshot: ${ago(d.generated_at)}. ` +
+    `A need is listed as repeated once ${d.rule.min_callers} separate callers ` +
+    `have asked for it over at least ${d.rule.min_spread_days} day.`;
+
+  const list = document.getElementById("list");
+  if (!d.clusters.length) {
+    list.innerHTML = `<p class="empty">Nothing yet. Every search so far has found a tool.</p>`;
+    return;
+  }
+
+  list.innerHTML = d.clusters.map((c) => {
+    const why = c.confirmed
+      ? (c.flags.length
+          ? `<div class="why flagged"><b>Worth a look before acting on this:</b><ul>${c.flags.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>`
+          : "")
+      : `<div class="why">Not counted as a repeated need yet:<ul>${c.withheld_because.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
+
+    const others = c.queries.length > 1
+      ? `<details><summary>${c.queries.length} ways this was asked</summary><ul>${
+          c.queries.map((q) => `<li>${esc(q)}</li>`).join("")}</ul></details>`
+      : "";
+
+    return `<article class="gap">
+      <h2>${esc(c.label)}<span class="badge ${c.confirmed ? "is-confirmed" : "is-open"}">${
+        c.confirmed ? "repeated" : "not yet"}</span></h2>
+      <div class="metrics">
+        <span><b>${fmt(c.distinct_callers)}</b> distinct callers</span>
+        <span><b>${fmt(c.distinct_owners)}</b> distinct owners</span>
+        <span><b>${fmt(c.occurrences)}</b> requests</span>
+        <span>over <b>${c.spread_days}</b> days</span>
+      </div>
+      ${why}${others}
+    </article>`;
+  }).join("");
+}
+
+fetch("gaps.json", { cache: "no-cache" })
+  .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+  .then(render)
+  .catch((e) => {
+    document.getElementById("list").innerHTML =
+      `<p class="empty">Could not load the board (${esc(e.message)}).</p>`;
+  });
+</script>
+</body>
+</html>
