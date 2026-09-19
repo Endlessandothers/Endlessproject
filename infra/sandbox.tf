@@ -72,12 +72,19 @@ data "aws_iam_policy_document" "runtime" {
   # Everything a tool might reach for, denied explicitly. None of it would work
   # anyway — there is no route and no other grant — but an explicit Deny cannot
   # be widened later by someone attaching a broader policy to this role.
+  #
+  # kms is NOT in this list, and that is deliberate. Lambda decrypts a function's
+  # environment variables through the execution role at init, and an explicit
+  # Deny overrides that service path as surely as it overrides a tool: the first
+  # deployment of this role failed every invocation with KMSAccessDeniedException
+  # before a single line of tool code ran. KMS stays on implicit deny, which
+  # still refuses the tool and permits the platform.
   statement {
     sid    = "DenyEverythingElse"
     effect = "Deny"
     actions = [
       "dynamodb:*", "s3:*", "bedrock:*", "lambda:*", "sts:*",
-      "secretsmanager:*", "ssm:*", "kms:*", "iam:*",
+      "secretsmanager:*", "ssm:*", "iam:*",
     ]
     resources = ["*"]
   }
@@ -111,7 +118,7 @@ data "aws_iam_policy_document" "fetcher" {
     effect = "Deny"
     actions = [
       "dynamodb:*", "s3:*", "bedrock:*", "lambda:*", "sts:*",
-      "secretsmanager:*", "ssm:*", "kms:*", "iam:*", "ec2:*",
+      "secretsmanager:*", "ssm:*", "iam:*", "ec2:*",
     ]
     resources = ["*"]
   }
