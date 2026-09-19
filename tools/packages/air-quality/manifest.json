@@ -1,0 +1,25 @@
+{
+  "tool_id": "air-quality",
+  "name": "Air Quality Now",
+  "description": "Current outdoor air quality at a latitude and longitude: PM2.5 and PM10 particulate levels, European and US air quality index values, and what those numbers mean for going outside.",
+  "category": "health",
+  "runtime": "lambda-vpc",
+  "runtime_reason": "Pure transform over one small JSON response. No native dependencies, no sustained CPU, runs in single-digit milliseconds.",
+  "source_api": "open-meteo.com",
+  "terms": "https://open-meteo.com/en/terms",
+  "creator": "ericsonasamoah3",
+  "closes_gap": "q015 — 'what is the current air quality where I am', unanswerable in both Phase 0 evaluation runs",
+  "input": {
+    "lat": { "type": "number", "required": true, "description": "latitude in decimal degrees" },
+    "lon": { "type": "number", "required": true, "description": "longitude in decimal degrees" }
+  },
+  "allowlist": ["air-quality-api.open-meteo.com"],
+  "requests": [
+    {
+      "id": "aq",
+      "method": "GET",
+      "url": "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}&current=pm10,pm2_5,european_aqi,us_aqi&timezone=auto"
+    }
+  ],
+  "sample": { "lat": 5.6, "lon": -0.19 }
+}
