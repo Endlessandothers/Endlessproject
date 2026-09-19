@@ -93,6 +93,22 @@ cd infra && terraform init && terraform plan
 node --test $(find infra/tests -name '*.test.mjs')
 ```
 
+## The sandbox gate
+
+```bash
+node --test "infra/tests/*.test.mjs"    # offline: no AWS, runs in CI
+node infra/tests/escape.live.mjs        # live: attacks the deployed sandbox
+```
+
+The second one is issue #5 and it is a **gate, not a task**: it attacks the real
+runtime and fetcher, and nothing third-party should be published while it exits
+non-zero. It is deliberately outside `node --test` because it needs credentials
+and invokes real functions — CI must never run it by accident against whatever
+account it happens to hold.
+
+It costs a handful of Lambda invocations and takes about a minute, most of it
+spent waiting for two deliberate timeouts.
+
 ## Callers and API keys
 
 Every call to search, exec and registry needs an Endless API key in the
