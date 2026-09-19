@@ -67,6 +67,29 @@ async function register(body) {
   const previous = await latestRow(body.tool_id);
   const version = pad(previous ? Number(previous.version) + 1 : 1);
 
+  // The executable package is stored ON the version row, so the code that runs
+  // and the version that was reviewed are the same immutable object. There is no
+  // way to swap a handler after approval without minting a new version.
+  const pkg = body.package ?? null;
+  if (pkg) {
+    if (typeof pkg.handler_source !== "string" || !pkg.handler_source.length) {
+      return json(400, { error: "package.handler_source must be a non-empty string" });
+    }
+    if (pkg.handler_source.length > 256 * 1024) {
+      return json(400, { error: "package.handler_source exceeds 256 KB" });
+    }
+    // Every host a tool may reach, fixed at registration. The fetcher re-checks
+    // at call time, but recording it here is what makes review meaningful.
+    for (const req of pkg.requests ?? []) {
+      let host;
+      try { host = new URL(String(req.url).replace(/\{\w+\}/g, "x")).host; }
+      catch { return json(400, { error: `request ${req.id}: url is not parseable` }); }
+      if (!(pkg.allowlist ?? []).includes(host)) {
+        return json(400, { error: `request ${req.id}: host ${host} is not in the declared allowlist` });
+      }
+    }
+  }
+
   const item = {
     tool_id: body.tool_id,
     version,
@@ -80,6 +103,14 @@ async function register(body) {
     vec_dims: vector.length,
     embed_model: MODEL,
     created_at: new Date().toISOString(),
+    ...(pkg ? {
+      handler_source: pkg.handler_source,
+      requests: pkg.requests ?? [],
+      allowlist: pkg.allowlist ?? [],
+      input_schema: pkg.input ?? {},
+      runtime: pkg.runtime ?? "lambda-vpc",
+      executable: true,
+    } : { executable: false }),
   };
 
   try {
