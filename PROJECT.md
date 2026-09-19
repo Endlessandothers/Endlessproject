@@ -202,6 +202,14 @@ standalone product that's useful even before the ecosystem is large.
 is genuinely unsolved. If the signal is noisy, the core pitch weakens. Search quality
 has to be strong *before* gap logging means anything.
 
+**Demand manufacturing.** Gap-signal quality is not only a noise problem, it is an
+adversarial one. Whoever benefits from a gap looking urgent is the person who closes
+it, and manufacturing demand needs no exploit — just patience and rephrasing. Counting
+distinct verified callers rather than occurrences, and discounting the closer's own
+contributions from the evidence that justified their bounty, are the controls; both
+depend on caller identity being enforced before clustering is built. See
+`docs/phase-1-gap-clustering.md`.
+
 **Density.** Gap detection can be measured at twenty tools and behave completely
 differently at two thousand, where near-misses crowd together and one global threshold
 stops separating a genuine gap from a retrieval failure. A small corpus flatters every
