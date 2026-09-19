@@ -203,6 +203,32 @@ data "aws_iam_policy_document" "apply" {
     resources = ["arn:aws:iam::${local.account_id}:role/${var.resource_prefix}-*"]
   }
 
+  # The sandbox VPC. EC2 networking actions mostly cannot be resource-scoped —
+  # Describe* has no resource, and CreateVpc has none until it exists — so this
+  # is scoped by ACTION instead: networking only. No instances, no images, no
+  # volumes, nothing that could run compute outside the Lambdas above.
+  statement {
+    sid = "ManageSandboxNetwork"
+    actions = [
+      "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:DescribeVpcs",
+      "ec2:ModifyVpcAttribute", "ec2:DescribeVpcAttribute",
+      "ec2:CreateSubnet", "ec2:DeleteSubnet", "ec2:DescribeSubnets",
+      "ec2:ModifySubnetAttribute",
+      "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup",
+      "ec2:DescribeSecurityGroups", "ec2:DescribeSecurityGroupRules",
+      "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress",
+      "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
+      "ec2:CreateNetworkAcl", "ec2:DeleteNetworkAcl", "ec2:DescribeNetworkAcls",
+      "ec2:CreateNetworkAclEntry", "ec2:DeleteNetworkAclEntry",
+      "ec2:ReplaceNetworkAclAssociation",
+      "ec2:CreateRouteTable", "ec2:DeleteRouteTable", "ec2:DescribeRouteTables",
+      "ec2:ReplaceRouteTableAssociation", "ec2:AssociateRouteTable",
+      "ec2:DescribeNetworkInterfaces", "ec2:DescribeAvailabilityZones",
+      "ec2:CreateTags", "ec2:DeleteTags", "ec2:DescribeAccountAttributes",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "ManageLogGroups"
     actions   = ["logs:*"]

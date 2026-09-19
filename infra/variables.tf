@@ -177,3 +177,21 @@ variable "judge_candidates" {
   type        = number
   default     = 3
 }
+
+variable "runtime_memory_mb" {
+  description = "Memory for the tool runtime. Lambda scales CPU with memory, and the sandbox is where creator code actually runs, so this is the knob that decides what 'not compute heavy' means in practice."
+  type        = number
+  default     = 512
+}
+
+variable "transform_timeout_ms" {
+  description = "Wall clock a creator's transform may use before it is killed. Well under the Lambda timeout so an overrun is reported as a tool failure rather than an infrastructure one."
+  type        = number
+  default     = 5000
+}
+
+variable "fetch_timeout_ms" {
+  description = "Per-request timeout for the outbound fetcher."
+  type        = number
+  default     = 10000
+}
