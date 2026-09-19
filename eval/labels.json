@@ -3,70 +3,333 @@
   "labelled_at": "2026-09-16",
   "issue": "#11 — label the frozen set against the seeded corpus",
   "queries_sha256": "6ff8f77cd01aff77418b657477adfe984ad4edd71c7384f1de212bbb41daabdf",
-  "corpus": "tools/catalog.json v1, 19 tools",
+  "corpus": "tools/catalog.json v3 (19 tools) + tools/packages/air-quality = 20",
   "method": "Each of the 60 frozen queries was read against the 19 tool descriptions and assigned the tool that SHOULD win, or null where no tool in the corpus can answer it. Queries were never edited. Labelling happened only after both the queries and the corpus were fixed.",
   "confidence": "high = the tool plainly answers the query. medium = it is the best available answer but partial. Marginal calls carry a note, because a recall number computed over shaky labels is a shaky number.",
   "contaminated": "true where the query touches a domain whose fixture description had been read before the queries were written. Those fixtures no longer exist in the registry, but topic selection was still influenced. Metrics are reported with and without them.",
   "labels": [
-    { "id": "q001", "expect": null, "confidence": "high" },
-    { "id": "q002", "expect": null, "confidence": "high" },
-    { "id": "q003", "expect": "current-time-in-zone", "confidence": "medium", "contaminated": false, "note": "Answers the working-hours half; does not resolve which zone the customer is in." },
-    { "id": "q004", "expect": null, "confidence": "high" },
-    { "id": "q005", "expect": null, "confidence": "high" },
-    { "id": "q006", "expect": null, "confidence": "high", "note": "No unit converter in the corpus." },
-    { "id": "q007", "expect": "public-holidays", "confidence": "high" },
-    { "id": "q008", "expect": null, "confidence": "medium", "contaminated": true, "note": "wikipedia-summary covers encyclopedia subjects, not arbitrary company websites." },
-    { "id": "q009", "expect": null, "confidence": "high" },
-    { "id": "q010", "expect": "geocode-address", "confidence": "high" },
-    { "id": "q011", "expect": null, "confidence": "high" },
-    { "id": "q012", "expect": "qr-code-generate", "confidence": "high" },
-    { "id": "q013", "expect": null, "confidence": "medium", "contaminated": true, "note": "Inflation, not foreign exchange. currency-convert does historical FX and cannot answer it." },
-    { "id": "q014", "expect": null, "confidence": "high" },
-    { "id": "q015", "expect": null, "confidence": "high", "contaminated": true, "note": "Air quality is not weather; open-meteo's air-quality product is not in the corpus." },
-    { "id": "q016", "expect": null, "confidence": "high" },
-    { "id": "q017", "expect": "github-repo-info", "confidence": "high" },
-    { "id": "q018", "expect": null, "confidence": "high", "note": "crypto-spot-price covers coins, not equities." },
-    { "id": "q019", "expect": null, "confidence": "high" },
-    { "id": "q020", "expect": "wikipedia-summary", "confidence": "high", "contaminated": true },
-    { "id": "q021", "expect": null, "confidence": "high" },
-    { "id": "q022", "expect": null, "confidence": "medium", "note": "food-product-nutrition needs a barcode for a packaged product; cooked brown rice by weight is not that." },
-    { "id": "q023", "expect": "crossref-paper-search", "confidence": "high" },
-    { "id": "q024", "expect": null, "confidence": "high" },
-    { "id": "q025", "expect": null, "confidence": "high" },
-    { "id": "q026", "expect": null, "confidence": "high" },
-    { "id": "q027", "expect": null, "confidence": "high" },
-    { "id": "q028", "expect": null, "confidence": "medium", "note": "public-ip-lookup returns the caller's own address, not ownership of an arbitrary one. A genuine near miss." },
-    { "id": "q029", "expect": null, "confidence": "high" },
-    { "id": "q030", "expect": "weather-forecast", "confidence": "high", "contaminated": true },
-    { "id": "q031", "expect": null, "confidence": "high" },
-    { "id": "q032", "expect": null, "confidence": "high" },
-    { "id": "q033", "expect": "currency-convert", "confidence": "high", "contaminated": true },
-    { "id": "q034", "expect": null, "confidence": "high" },
-    { "id": "q035", "expect": null, "confidence": "medium", "contaminated": true, "note": "worldbank-indicator is country-level; the query asks about a city." },
-    { "id": "q036", "expect": null, "confidence": "high" },
-    { "id": "q037", "expect": "sunrise-sunset", "confidence": "high", "contaminated": true },
-    { "id": "q038", "expect": null, "confidence": "high" },
-    { "id": "q039", "expect": null, "confidence": "high" },
-    { "id": "q040", "expect": null, "confidence": "high" },
-    { "id": "q041", "expect": null, "confidence": "high" },
-    { "id": "q042", "expect": null, "confidence": "high" },
-    { "id": "q043", "expect": null, "confidence": "medium", "note": "worldbank-indicator has electricity access, not price per kWh." },
-    { "id": "q044", "expect": null, "confidence": "high" },
-    { "id": "q045", "expect": null, "confidence": "high" },
-    { "id": "q046", "expect": null, "confidence": "high" },
-    { "id": "q047", "expect": null, "confidence": "high" },
-    { "id": "q048", "expect": null, "confidence": "high" },
-    { "id": "q049", "expect": null, "confidence": "high", "contaminated": true, "note": "dictionaryapi.dev was dropped from the corpus because it does not respond, so nothing answers this." },
-    { "id": "q050", "expect": null, "confidence": "high" },
-    { "id": "q051", "expect": null, "confidence": "high" },
-    { "id": "q052", "expect": null, "confidence": "medium", "note": "geocode-address resolves named places, not nearest-facility search." },
-    { "id": "q053", "expect": "book-by-isbn", "confidence": "medium", "note": "The tool goes ISBN to book; the query asks the reverse and adds an in-print check it cannot answer." },
-    { "id": "q054", "expect": null, "confidence": "high" },
-    { "id": "q055", "expect": null, "confidence": "high" },
-    { "id": "q056", "expect": null, "confidence": "high" },
-    { "id": "q057", "expect": null, "confidence": "high" },
-    { "id": "q058", "expect": null, "confidence": "high" },
-    { "id": "q059", "expect": null, "confidence": "high" },
-    { "id": "q060", "expect": null, "confidence": "high" }
-  ]
+    {
+      "id": "q001",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q002",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q003",
+      "expect": "current-time-in-zone",
+      "confidence": "medium",
+      "contaminated": false,
+      "note": "Answers the working-hours half; does not resolve which zone the customer is in."
+    },
+    {
+      "id": "q004",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q005",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q006",
+      "expect": null,
+      "confidence": "high",
+      "note": "No unit converter in the corpus."
+    },
+    {
+      "id": "q007",
+      "expect": "public-holidays",
+      "confidence": "high"
+    },
+    {
+      "id": "q008",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": true,
+      "note": "wikipedia-summary covers encyclopedia subjects, not arbitrary company websites."
+    },
+    {
+      "id": "q009",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q010",
+      "expect": "geocode-address",
+      "confidence": "high"
+    },
+    {
+      "id": "q011",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q012",
+      "expect": "qr-code-generate",
+      "confidence": "high"
+    },
+    {
+      "id": "q013",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": true,
+      "note": "Inflation, not foreign exchange. currency-convert does historical FX and cannot answer it."
+    },
+    {
+      "id": "q014",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q015",
+      "expect": "air-quality",
+      "confidence": "high",
+      "note": "Was null: no air-quality tool existed when the corpus was 19 tools. air-quality was published 2026-09-19 to close this gap, so the label moved with it. Phase 0's reported numbers refer to the 19-tool corpus and are unaffected by this."
+    },
+    {
+      "id": "q016",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q017",
+      "expect": "github-repo-info",
+      "confidence": "high"
+    },
+    {
+      "id": "q018",
+      "expect": null,
+      "confidence": "high",
+      "note": "crypto-spot-price covers coins, not equities."
+    },
+    {
+      "id": "q019",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q020",
+      "expect": "wikipedia-summary",
+      "confidence": "high",
+      "contaminated": true
+    },
+    {
+      "id": "q021",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q022",
+      "expect": null,
+      "confidence": "medium",
+      "note": "food-product-nutrition needs a barcode for a packaged product; cooked brown rice by weight is not that."
+    },
+    {
+      "id": "q023",
+      "expect": "crossref-paper-search",
+      "confidence": "high"
+    },
+    {
+      "id": "q024",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q025",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q026",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q027",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q028",
+      "expect": null,
+      "confidence": "medium",
+      "note": "public-ip-lookup returns the caller's own address, not ownership of an arbitrary one. A genuine near miss."
+    },
+    {
+      "id": "q029",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q030",
+      "expect": "weather-forecast",
+      "confidence": "high",
+      "contaminated": true
+    },
+    {
+      "id": "q031",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q032",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q033",
+      "expect": "currency-convert",
+      "confidence": "high",
+      "contaminated": true
+    },
+    {
+      "id": "q034",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q035",
+      "expect": null,
+      "confidence": "medium",
+      "contaminated": true,
+      "note": "worldbank-indicator is country-level; the query asks about a city."
+    },
+    {
+      "id": "q036",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q037",
+      "expect": "sunrise-sunset",
+      "confidence": "high",
+      "contaminated": true
+    },
+    {
+      "id": "q038",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q039",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q040",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q041",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q042",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q043",
+      "expect": null,
+      "confidence": "medium",
+      "note": "worldbank-indicator has electricity access, not price per kWh."
+    },
+    {
+      "id": "q044",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q045",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q046",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q047",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q048",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q049",
+      "expect": null,
+      "confidence": "high",
+      "contaminated": true,
+      "note": "dictionaryapi.dev was dropped from the corpus because it does not respond, so nothing answers this."
+    },
+    {
+      "id": "q050",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q051",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q052",
+      "expect": null,
+      "confidence": "medium",
+      "note": "geocode-address resolves named places, not nearest-facility search."
+    },
+    {
+      "id": "q053",
+      "expect": "book-by-isbn",
+      "confidence": "medium",
+      "note": "The tool goes ISBN to book; the query asks the reverse and adds an in-print check it cannot answer."
+    },
+    {
+      "id": "q054",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q055",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q056",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q057",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q058",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q059",
+      "expect": null,
+      "confidence": "high"
+    },
+    {
+      "id": "q060",
+      "expect": null,
+      "confidence": "high"
+    }
+  ],
+  "corpus_note": "The corpus grew after Phase 0 closed. Every number in docs/phase-0-findings.md was measured on the 19-tool corpus; a run against 20 is a different measurement, not a better or worse one."
 }
