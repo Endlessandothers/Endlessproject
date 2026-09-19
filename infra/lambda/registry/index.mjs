@@ -173,6 +173,11 @@ async function register(body, caller) {
     mcp_url: body.mcp_url ?? null,
     category: body.category ?? "uncategorised",
     owner,
+    // Ownership was taken from the authenticated caller, so it can be trusted.
+    // Rows written before identity was enforced carry no such flag, and
+    // anything that reasons about ownership must treat those as unverified —
+    // see mass.mjs. The 20 tools seeded in Phase 0 are exactly that case.
+    owner_verified: true,
     source_api: body.source_api ?? null,
     vec_b64: packVector(vector),
     vec_dims: vector.length,

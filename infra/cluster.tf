@@ -1,7 +1,8 @@
-# cluster-fn and the gaps board bucket — Phase 1, issues #8, #9 and #12.
+# cluster-fn and the gaps board bucket — Phase 1, issues #8, #9, #10 and #12.
 #
-# The nightly job that turns logged gaps into demand, and the S3 object it
-# writes for the public board to serve.
+# The nightly batch and the two objects it writes for the public board: demand
+# that nobody met (gaps.json) and how much each tool is actually used
+# (tools.json).
 #
 # No new DynamoDB table. The free-tier budget is at 23 of 25 RCU/WCU and a
 # snapshot in S3 is the better shape anyway: the board is read-mostly and
@@ -73,35 +74,49 @@ resource "aws_s3_bucket_lifecycle_configuration" "board" {
 # ---------------------------------------------------------------- the role
 resource "aws_iam_role" "cluster" {
   name               = "${local.prefix}-cluster-role"
-  description        = "Nightly gap clustering. Reads gaps, writes one object."
+  description        = "Nightly batch. Reads gaps, events and tools; writes two snapshots. No write access to any table."
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
 data "aws_iam_policy_document" "cluster" {
+  # Read-only across all three. The nightly job derives both artefacts from the
+  # log and the registry, and must not be able to write to either.
   statement {
-    sid     = "ReadGaps"
+    sid     = "ReadGapsEventsAndTools"
     actions = ["dynamodb:Scan", "dynamodb:Query"]
     resources = [
       aws_dynamodb_table.gaps.arn,
       "${aws_dynamodb_table.gaps.arn}/index/*",
+      aws_dynamodb_table.events.arn,
+      "${aws_dynamodb_table.events.arn}/index/*",
+      aws_dynamodb_table.tools.arn,
     ]
   }
 
-  # Reading gaps must never be able to change one. The board is derived from the
-  # log; if the job could edit the log, the board would be evidence of itself.
+  # Mass is recomputed from the event log, so the job that computes it must not
+  # be able to edit the log. If it could, the ranking would be evidence of
+  # itself — which is the whole reason mass is derived rather than accumulated.
   statement {
-    sid       = "DenyGapWrites"
-    effect    = "Deny"
-    actions   = concat(local.mutating_actions, ["dynamodb:PutItem"])
-    resources = [aws_dynamodb_table.gaps.arn, "${aws_dynamodb_table.gaps.arn}/index/*"]
+    sid     = "DenyAllWrites"
+    effect  = "Deny"
+    actions = concat(local.mutating_actions, ["dynamodb:PutItem"])
+    resources = [
+      aws_dynamodb_table.gaps.arn, "${aws_dynamodb_table.gaps.arn}/index/*",
+      aws_dynamodb_table.events.arn, "${aws_dynamodb_table.events.arn}/index/*",
+      aws_dynamodb_table.tools.arn,
+    ]
   }
 
-  # One object, named. Not the bucket, not a prefix: this job writes gaps.json
-  # and has no business writing anything else into a bucket CloudFront serves.
+  # Two objects, named individually. Not the bucket and not a prefix: this job
+  # writes these two files and has no business putting anything else into a
+  # bucket CloudFront serves to the public.
   statement {
-    sid       = "WriteTheSnapshot"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.board.arn}/gaps.json"]
+    sid     = "WriteTheSnapshots"
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.board.arn}/gaps.json",
+      "${aws_s3_bucket.board.arn}/tools.json",
+    ]
   }
 
   statement {
@@ -136,6 +151,8 @@ resource "aws_lambda_function" "cluster" {
   environment {
     variables = {
       GAPS_TABLE         = aws_dynamodb_table.gaps.name
+      EVENTS_TABLE       = aws_dynamodb_table.events.name
+      TOOLS_TABLE        = aws_dynamodb_table.tools.name
       BOARD_BUCKET       = aws_s3_bucket.board.id
       CLUSTER_SIMILARITY = tostring(var.cluster_similarity)
     }

@@ -172,6 +172,49 @@ function cmdTools() {
   console.log();
 }
 
+// Reads the snapshot the nightly job publishes rather than recomputing mass
+// here. Two implementations of a ranking rule is two rankings, and the one
+// people see should be the one this prints.
+function cmdMass() {
+  const bucket = `${PREFIX}-board-${aws(["sts", "get-caller-identity"]).Account}`;
+  let snap;
+  try {
+    const out = join(tmpdir(), `tools-${Date.now()}.json`);
+    execFileSync("aws", ["s3", "cp", `s3://${bucket}/tools.json`, out, "--region", REGION],
+      { stdio: "pipe" });
+    snap = JSON.parse(readFileSync(out, "utf8"));
+  } catch {
+    return fail(`no snapshot yet — run: aws lambda invoke --function-name ${PREFIX}-cluster --payload '{}' out.json`);
+  }
+
+  console.log(`
+  mass — ${snap.tools_with_usage} of ${snap.tools_total} tools have been used`);
+  console.log(`  ${C.dim(`${snap.scoring}, from ${snap.events_scanned} events · ${ago(snap.generated_at)}`)}
+`);
+
+  for (const t of snap.tools) {
+    if (t.mass === 0) continue;
+    const bar = "█".repeat(Math.min(30, t.mass));
+    const warn = t.ownership_verified ? "" : C.yellow("  ownership unverified");
+    console.log(`  ${C.bold(t.tool_id.padEnd(22))} ${String(t.mass).padStart(4)} ${C.dim(bar)}${warn}`);
+    console.log(`    ${C.dim(`${t.distinct_callers} callers · ${t.distinct_owners} owners · ${Math.round((t.success_rate ?? 0) * 100)}% success · p50 ${t.p50_ms}ms`)}`);
+    if (t.self_calls_excluded || t.unverified_excluded) {
+      console.log(`    ${C.dim(`excluded: ${t.self_calls_excluded} self-calls, ${t.unverified_excluded} unverified`)}`);
+    }
+  }
+
+  const unused = snap.tools.filter((t) => t.mass === 0);
+  if (unused.length) {
+    console.log(`
+  ${C.dim(`${unused.length} never called: ${unused.map((t) => t.tool_id).join(", ")}`)}`);
+  }
+  if (snap.tools_with_unverified_ownership) {
+    console.log(`
+  ${C.yellow(`${snap.tools_with_unverified_ownership} tools predate verified ownership — their self-call figures cannot be relied on`)}`);
+  }
+  console.log();
+}
+
 function cmdEvents(limit) {
   const events = scan("events").sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   console.log(`\n  ${events.length} events, newest first\n`);
@@ -198,15 +241,17 @@ switch (cmd) {
   case "gaps": cmdGaps(positional[0], limit); break;
   case "tools": cmdTools(); break;
   case "events": cmdEvents(limit); break;
+  case "mass": cmdMass(); break;
   default:
     console.log(`
-  ${C.bold("endless")} — Phase 0 inspection
+  ${C.bold("endless")} — registry inspection
 
     endless search "<query>"    run a search and see the gap decision
     endless gaps                recent gaps, newest first
     endless gaps <id>           one gap in full, with what it rejected
     endless tools               what is registered
     endless events              recent activity
+    endless mass                how much each tool is actually used
 
   ${C.dim(`region ${REGION} · prefix ${PREFIX}`)}
 `);
