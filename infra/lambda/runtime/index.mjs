@@ -29,7 +29,12 @@ const FORBIDDEN = [
   [/\bfetch\s*\(/, "fetch()"],
   [/\bprocess\b/, "process"],
   [/\bglobalThis\b/, "globalThis"],
-  [/\beval\s*\(|new\s+Function/, "eval or Function constructor"],
+  // Function("return this")() was demonstrated evading this screen on the
+  // deployed sandbox: it reached the point of calling fetch. The network
+  // stopped it — the call hung until the transform timeout rather than
+  // returning data — which is the boundary working and the screen failing.
+  // Closed anyway: a known hole left open invites the search for the next one.
+  [/\beval\s*\(|new\s+Function|\bFunction\s*\(/, "eval or the Function constructor"],
   [/\bXMLHttpRequest\b|\bWebSocket\b/, "network client"],
 ];
 
