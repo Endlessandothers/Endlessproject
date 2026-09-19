@@ -93,6 +93,39 @@ cd infra && terraform init && terraform plan
 node --test $(find infra/tests -name '*.test.mjs')
 ```
 
+## Connecting an agent (MCP)
+
+The only endpoint an ordinary agent can reach. Everything else needs a signed
+AWS request.
+
+```json
+{
+  "mcpServers": {
+    "endless": {
+      "type": "http",
+      "url": "https://uhob535yiaaebmey6yiythlase0aeqro.lambda-url.us-east-1.on.aws/",
+      "headers": { "Authorization": "Bearer elk_<caller>_<secret>" }
+    }
+  }
+}
+```
+
+Three tools: `endless_search` (find a tool, and log a gap when there is none),
+`endless_call` (run one), `endless_gaps` (read unmet needs).
+
+`mcp-fn` is an adapter and holds no authority. It forwards the caller's
+Authorization header to search-fn and exec-fn, which verify it as they would for
+anyone — so it cannot do anything the caller could not, and gap counts record
+the agent rather than the adapter.
+
+Its Function URL is the one endpoint with `authorization_type = "NONE"`, which
+is correct: an agent runtime can send a bearer token and cannot sign SigV4
+against an account it has no credentials for. The endpoint is not
+unauthenticated — everything touching data needs an Endless key — but
+`initialize`, `ping` and `tools/list` do answer without one, so this is the
+public surface, and putting CloudFront and WAF in front of it is the open DDoS
+item rather than a refinement.
+
 ## The sandbox gate
 
 ```bash
