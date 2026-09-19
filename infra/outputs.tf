@@ -38,3 +38,8 @@ output "threshold_t" {
   description = "Starting gap threshold. Per issue #12 this is an output of Phase 0, not an input - it gets derived from the eval score distributions."
   value       = var.threshold_t
 }
+
+output "board_bucket" {
+  description = "Where the nightly gap snapshot is written. Served through CloudFront, never public directly."
+  value       = aws_s3_bucket.board.id
+}

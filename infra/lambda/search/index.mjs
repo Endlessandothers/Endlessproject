@@ -9,7 +9,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand, PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { randomUUID } from "node:crypto";
-import { unpackVector, cosine } from "./vector.mjs";
+import { packVector, unpackVector, cosine } from "./vector.mjs";
 import { buildIndex, bm25, saturate, fuse } from "./lexical.mjs";
 import { buildBody, parseVerdict, extractText, extractUsage } from "./judge.mjs";
 import { authenticate, provenanceOf } from "./auth.mjs";
@@ -231,6 +231,12 @@ export const handler = async (event) => {
         TableName: GAPS,
         Item: {
           gap_id, ts, day, query, ...provenance,
+          // The query vector, stored because it was already computed above.
+          // Clustering groups gaps by meaning, and re-embedding every gap on
+          // every nightly run would be a recurring bill for something that was
+          // free at write time.
+          vec_b64: packVector(vector),
+          vec_dims: vector.length,
           reason: rejected ? "rejected" : (verdict.used ? "judged_no_fit" : "below_threshold"),
           decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
           threshold_t: THRESHOLD_T,

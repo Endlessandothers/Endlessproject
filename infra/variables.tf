@@ -73,6 +73,18 @@ variable "table_wcu" {
   default     = 5
 }
 
+variable "cluster_similarity" {
+  description = "Cosine similarity at or above which two gap queries are treated as the same need. Provisional: Titan V2 query-to-query similarity is a different distribution from the query-to-tool one that produced T, and it cannot be derived from a single gap row. Issue #13 must set it from the distribution the way T was, and cluster-report.mjs prints that distribution."
+  type        = number
+  default     = 0.5
+}
+
+variable "cluster_schedule" {
+  description = "When the clustering job runs. Nightly rather than per search, because demand is a trend and recomputing it per request would cost money to say the same thing."
+  type        = string
+  default     = "cron(15 3 * * ? *)"
+}
+
 variable "callers_rcu" {
   description = "Read capacity for the callers table. Read once per search and once per tool call, as an eventually consistent GetItem at 0.5 RCU, so 2 sustains about 4/sec against an account concurrency ceiling of 10. Raise this first if throttling appears."
   type        = number

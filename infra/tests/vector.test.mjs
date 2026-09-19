@@ -11,8 +11,23 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { packVector } from "../lambda/registry/vector.mjs";
 import { unpackVector, cosine } from "../lambda/search/vector.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+// search/vector.mjs is copied verbatim into the cluster package, which reads
+// the query vectors that search wrote. A copy that drifts would cluster gaps by
+// a slightly different geometry than the one they were embedded in, and the
+// symptom would be plausible-looking groups rather than an error.
+test("search and cluster ship the same vector module", () => {
+  const a = readFileSync(join(HERE, "../lambda/search/vector.mjs"));
+  const b = readFileSync(join(HERE, "../lambda/cluster/vector.mjs"));
+  assert.ok(a.equals(b), "cluster/vector.mjs has drifted from search/vector.mjs");
+});
 
 const F32 = (n) => Math.fround(n);
 
