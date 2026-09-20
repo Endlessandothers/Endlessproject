@@ -10,13 +10,26 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const raw = readFileSync(join(HERE, "personas.json"), "utf8").replace(/\r\n/g, "\n");
+
+// Which frozen set. personas.json was written to measure clustering and is full
+// of needs nothing can close — PDF parsing, OCR, uptime monitoring. That makes
+// it useless for the builder: every need fails for the same reason and the path
+// where generation succeeds is never exercised. builder-personas.json is the
+// opposite, and every need in it is closable by a real free keyless API.
+//
+// Each set has its own checksum, its own labels and its own keys. Mixing them
+// would make either measurement meaningless.
+const SET = (process.argv.find((a) => a.startsWith("--set=")) ?? "--set=personas").slice(6);
+const SET_FILE = SET === "personas" ? "personas.json" : SET + "-personas.json";
+const SET_SHA = SET === "personas" ? "personas.sha256" : SET + "-personas.sha256";
+const TRUTH_FILE = SET === "personas" ? "truth.json" : SET + "-truth.json";
+const raw = readFileSync(join(HERE, SET_FILE), "utf8").replace(/\r\n/g, "\n");
 const sha = createHash("sha256").update(raw, "utf8").digest("hex");
-writeFileSync(join(HERE, "personas.sha256"), `${sha}  personas.json\n`);
+writeFileSync(join(HERE, SET_SHA), `${sha}  personas.json\n`);
 
 // truth.json records which set it was written against, so a label file cannot
 // silently be paired with a different set of requests.
-const tp = join(HERE, "truth.json");
+const tp = join(HERE, TRUTH_FILE);
 const truth = JSON.parse(readFileSync(tp, "utf8"));
 truth.personas_sha256 = sha;
 writeFileSync(tp, `${JSON.stringify(truth, null, 2)}\n`);

@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "labelled": "2026-09-20",
+  "personas_sha256": "83b552a5f7d3d03826f8c032c4f1ea1f1d5f329231ea9293e9c41ccbd877ef29",
+  "note": "Labels for the builder set. Written before any run, like the other one. This set is not used to score clustering — truth.json does that — so the labels here exist to say which needs a correct builder should be able to close, and with what.",
+  "needs": [
+    {
+      "id": "pokemon",
+      "description": "Look up a Pokemon's type and base stats by name",
+      "expected_distinct_owners": 4,
+      "closable_by": "pokeapi.co — free, keyless, HTTPS",
+      "requests": [
+        "what type is pikachu",
+        "look up a pokemon by name and get its stats",
+        "pokemon base stats and type from its name",
+        "get details about a pokemon"
+      ]
+    },
+    {
+      "id": "country",
+      "description": "Facts about a country: capital, population, currency, region",
+      "expected_distinct_owners": 3,
+      "closable_by": "restcountries.com — free, keyless, HTTPS",
+      "requests": [
+        "facts about a country by name",
+        "population and capital of a country",
+        "what currency and capital does a country use",
+        "country information including region and languages"
+      ]
+    },
+    {
+      "id": "dog-images",
+      "description": "Photographs of a named dog breed",
+      "expected_distinct_owners": 3,
+      "closable_by": "dog.ceo — free, keyless, HTTPS",
+      "requests": [
+        "pictures of a dog breed",
+        "show me photos of a specific dog breed",
+        "random dog breed images",
+        "get images for a dog breed by name"
+      ]
+    }
+  ],
+  "singletons": [
+    "current time in tokyo",
+    "what will the weather be tomorrow in lisbon",
+    "how tall is the ground at these coordinates",
+    "generate a qr code for a url"
+  ],
+  "what_this_measures": [
+    "Whether the builder closes a need that CAN be closed. The other set cannot answer that, because every need in it is unclosable and the builder fails all of them for the same reason.",
+    "Whether the duplicate check correctly refuses the four singletons, which existing tools already answer."
+  ],
+  "what_this_does_not_measure": [
+    "Clustering quality. truth.json measures that, on a set written for it.",
+    "Whether real people would phrase things this way. One author, as before."
+  ]
+}

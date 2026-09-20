@@ -21,7 +21,7 @@ fixed in `PROJECT.md` directly rather than filed here.
 
 ## Phase 3 — Agents building tools
 
-### [ ] Define closure without reference to a threshold
+### [x] Define closure without reference to a threshold
 
 **Where:** `PROJECT.md`, "Agents building tools", step 4 of the sequence.
 
@@ -48,6 +48,20 @@ disagree, the system can report a gap and its closure simultaneously.
 system marking its own homework, only one level up. The independence that matters is
 between the *builder* and the *judge*, not between the judge and a number. Worth
 confirming the adjudicator is not given the fact that the candidate was auto-generated.
+
+**RESOLVED 2026-09-20.** Closure is judged per query by the adjudicator, in
+`infra/lambda/cluster/bounty.mjs`, and never against a threshold.
+
+The watch-for was acted on rather than noted. `judgeView` in
+`registry/builder.mjs` strips everything that could identify a generated
+candidate — provisional, the model, the cluster it was built for — so a
+generated tool and a person's tool produce a byte-identical view. There is a
+test asserting exactly that.
+
+It is not full independence: the same platform still supplies both the builder
+and the judge, and no second party exists here to be one. What it removes is the
+one signal that could bias the judge in either direction, which was what was
+actually available.
 
 ---
 

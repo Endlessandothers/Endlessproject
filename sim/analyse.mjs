@@ -27,6 +27,19 @@ import { cosine, cluster, summarise, assess } from "../infra/lambda/cluster/clus
 import { unpackVector } from "../infra/lambda/cluster/vector.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+// Which frozen set. personas.json was written to measure clustering and is full
+// of needs nothing can close — PDF parsing, OCR, uptime monitoring. That makes
+// it useless for the builder: every need fails for the same reason and the path
+// where generation succeeds is never exercised. builder-personas.json is the
+// opposite, and every need in it is closable by a real free keyless API.
+//
+// Each set has its own checksum, its own labels and its own keys. Mixing them
+// would make either measurement meaningless.
+const SET = (process.argv.find((a) => a.startsWith("--set=")) ?? "--set=personas").slice(6);
+const SET_FILE = SET === "personas" ? "personas.json" : SET + "-personas.json";
+const SET_SHA = SET === "personas" ? "personas.sha256" : SET + "-personas.sha256";
+const TRUTH_FILE = SET === "personas" ? "truth.json" : SET + "-truth.json";
 const REGION = process.env.AWS_REGION || "us-east-1";
 const PREFIX = process.env.ENDLESS_PREFIX || "endless-p0";
 
@@ -38,17 +51,17 @@ const C = {
   yellow: (s) => `\x1b[33m${s}\x1b[0m`,
 };
 
-const rawPersonas = readFileSync(join(HERE, "personas.json"), "utf8");
+const rawPersonas = readFileSync(join(HERE, SET_FILE), "utf8");
 const sha = createHash("sha256").update(rawPersonas.replace(/\r\n/g, "\n"), "utf8").digest("hex");
-const frozen = existsSync(join(HERE, "personas.sha256"))
-  ? readFileSync(join(HERE, "personas.sha256"), "utf8").trim().split(/\s+/)[0]
+const frozen = existsSync(join(HERE, SET_SHA))
+  ? readFileSync(join(HERE, SET_SHA), "utf8").trim().split(/\s+/)[0]
   : null;
 if (frozen && frozen !== sha) {
-  console.error(C.red("personas.json changed after freezing. Refusing to report numbers."));
+  console.error(C.red(`${SET_FILE} changed after freezing. Refusing to report numbers.`));
   process.exit(2);
 }
 
-const truth = JSON.parse(readFileSync(join(HERE, "truth.json"), "utf8"));
+const truth = JSON.parse(readFileSync(join(HERE, TRUTH_FILE), "utf8"));
 
 // Which need each request belongs to, from the labels written before the run.
 const needOf = new Map();

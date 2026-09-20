@@ -354,5 +354,43 @@ if (novel.length) {
 }
 console.log(`  ${C.dim(`written to tools/generated/${pkg.tool_id}/`)}\n`);
 
-console.log(`  ${C.bold("nothing has been published and nothing can run.")}`);
-console.log(`  ${C.dim("--publish registers it as provisional; it still needs review before it executes.")}\n`);
+if (!args.includes("--publish")) {
+  console.log(`  ${C.bold("nothing has been published and nothing can run.")}`);
+  console.log(`  ${C.dim("--publish registers it as provisional; it still needs review before it executes.")}\n`);
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------- step 5
+//
+// An ad-hoc brief is sufficient to GENERATE against and never sufficient to
+// publish. A need typed on a command line is not recorded demand, and the whole
+// argument for a tool existing is that the demand was recorded.
+if (cluster.adhoc) {
+  console.error(C.red("  --publish needs a cluster from the board, not a brief typed on the command line"));
+  process.exit(1);
+}
+
+const pub = invokeLambda("registry", {
+  version: "2.0", rawPath: "/tools", isBase64Encoded: false,
+  requestContext: { http: { method: "POST" } },
+  headers: { authorization: `Bearer ${KEY}` },
+  body: JSON.stringify({
+    tool_id: pkg.tool_id, name: pkg.name, description: pkg.description,
+    category: pkg.category ?? "generated",
+    package: {
+      handler_source: pkg.handler_source, requests: pkg.requests ?? [],
+      allowlist: pkg.allowlist ?? [], input: pkg.input ?? {}, runtime: "lambda-vpc",
+      uses: [],
+    },
+  }),
+});
+
+if (pub.status !== 201) {
+  console.error(C.red(`  publish failed (${pub.status}): ${pub.body.error}`));
+  process.exit(1);
+}
+
+console.log(`  ${C.green("published")} ${C.bold(pub.body.ref)} ${C.yellow("provisional")}`);
+console.log(`  ${C.dim(`owner ${pub.body.owner} · charged ${pub.body.charged} · ${pub.body.credits_remaining} credits left`)}`);
+console.log(`\n  ${C.bold("it still cannot run.")} ${C.dim(`node cli/review.mjs ${pkg.tool_id} ${pub.body.version}`)}`);
+console.log(`  ${C.dim(`then: node cli/closure.mjs ${clusterId} ${pkg.tool_id} --simulated`)}\n`);

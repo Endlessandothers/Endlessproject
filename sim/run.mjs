@@ -30,9 +30,22 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+// Which frozen set. personas.json was written to measure clustering and is full
+// of needs nothing can close — PDF parsing, OCR, uptime monitoring. That makes
+// it useless for the builder: every need fails for the same reason and the path
+// where generation succeeds is never exercised. builder-personas.json is the
+// opposite, and every need in it is closable by a real free keyless API.
+//
+// Each set has its own checksum, its own labels and its own keys. Mixing them
+// would make either measurement meaningless.
+const SET = (process.argv.find((a) => a.startsWith("--set=")) ?? "--set=personas").slice(6);
+const SET_FILE = SET === "personas" ? "personas.json" : SET + "-personas.json";
+const SET_SHA = SET === "personas" ? "personas.sha256" : SET + "-personas.sha256";
+const TRUTH_FILE = SET === "personas" ? "truth.json" : SET + "-truth.json";
 const REGION = process.env.AWS_REGION || "us-east-1";
 const PREFIX = process.env.ENDLESS_PREFIX || "endless-p0";
-const KEYS_PATH = join(HERE, ".keys.json"); // gitignored: these are credentials
+const KEYS_PATH = join(HERE, ".keys-" + SET + ".json"); // gitignored: these are credentials
 
 const C = {
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
@@ -42,17 +55,17 @@ const C = {
   yellow: (s) => `\x1b[33m${s}\x1b[0m`,
 };
 
-const raw = readFileSync(join(HERE, "personas.json"), "utf8");
+const raw = readFileSync(join(HERE, SET_FILE), "utf8");
 const personas = JSON.parse(raw).personas;
 
 // The frozen set, verified the way the Phase 0 harness verifies its queries. A
 // set that can be edited after seeing the results is not a blind set.
 const sha = createHash("sha256").update(raw.replace(/\r\n/g, "\n"), "utf8").digest("hex");
-const expected = existsSync(join(HERE, "personas.sha256"))
-  ? readFileSync(join(HERE, "personas.sha256"), "utf8").trim().split(/\s+/)[0]
+const expected = existsSync(join(HERE, SET_SHA))
+  ? readFileSync(join(HERE, SET_SHA), "utf8").trim().split(/\s+/)[0]
   : null;
 if (expected && expected !== sha) {
-  console.error(C.red("personas.json changed after it was frozen. Refusing to run."));
+  console.error(C.red(`${SET_FILE} changed after it was frozen. Refusing to run.`));
   console.error(`  frozen: ${expected}\n  now:    ${sha}`);
   process.exit(2);
 }
@@ -84,7 +97,7 @@ function mint() {
     console.log(`  ${C.green("minted")} ${p.caller_id.padEnd(12)} ${C.dim(p.role)}`);
   }
   writeFileSync(KEYS_PATH, JSON.stringify(keys, null, 2));
-  console.log(`\n  ${Object.keys(keys).length} keys written to sim/.keys.json ${C.dim("(gitignored)")}\n`);
+  console.log(`\n  ${Object.keys(keys).length} keys written to sim/.keys-${SET}.json ${C.dim("(gitignored)")}\n`);
 }
 
 // ---------------------------------------------------------------- replay
@@ -110,7 +123,7 @@ async function ask(url, key, text) {
 
 async function replay() {
   if (!existsSync(KEYS_PATH)) {
-    console.error(C.red("no sim/.keys.json — run: node sim/run.mjs --mint"));
+    console.error(C.red(`no sim/.keys-${SET}.json — run: node sim/run.mjs --set=${SET} --mint`));
     process.exit(1);
   }
   const keys = JSON.parse(readFileSync(KEYS_PATH, "utf8"));
@@ -205,10 +218,12 @@ function purge() {
 }
 
 // ---------------------------------------------------------------- dispatch
-const arg = process.argv[2];
-if (arg === "--mint") mint();
-else if (arg === "--purge") purge();
-else if (arg === "--help") {
+// Flags rather than a single positional, so --set= can sit anywhere. The first
+// version read process.argv[2] and `--set=builder --help` ran the whole replay.
+const argv = process.argv.slice(2);
+if (argv.includes("--mint")) mint();
+else if (argv.includes("--purge")) purge();
+else if (argv.includes("--help")) {
   console.log(`
   ${C.bold("sim/run.mjs")} — replay twelve simulated strangers
 
