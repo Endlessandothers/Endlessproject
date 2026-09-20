@@ -6,157 +6,33 @@ wrong table once and silently overwrote a runbook column. Regenerating from one
 source of truth removes the whole class of problem — if the deck is wrong, this
 file is wrong, and the fix is visible in a diff.
 
-Style is inherited from endless-phase-1.pptx and deliberately not reinvented:
-16:9, Segoe UI, slate ink on white, one orange rule under each title.
+Style and layout helpers come from deckkit.py, shared with the Phase 3 deck.
+Two copies of a layout function is two layouts the moment one is edited, and
+these decks are meant to read as one set.
 
     python docs/plans/build-phase-2-deck.py
 """
 
+import sys
 from pathlib import Path
 
-from pptx import Presentation
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.util import Inches, Pt
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-HERE = Path(__file__).resolve().parent
-OUT = HERE / "endless-phase-2.pptx"
-ICONS = HERE / "icons"
+from deckkit import (  # noqa: E402
+    deck, slide, text, heading, callout, table, legend_card, verify, icon,
+    INK, ORANGE, MUTED, BODY, DIM, WHITE, CALLOUT_BG, CALLOUT_TX,
+    DONE_BG, DONE_TX, WARN_BG, WARN_TX, FONT,
+)
+from pptx.enum.shapes import MSO_SHAPE  # noqa: E402
+from pptx.enum.text import PP_ALIGN  # noqa: E402
+from pptx.util import Inches, Pt  # noqa: E402
 
-
-def icon(name):
-    """Official AWS service icons, from docs/plans/icons.
-
-    Read from the repo rather than lifted out of endless-phase-1.pptx at build
-    time, which is how this started: a generated artefact depending on another
-    generated artefact, unbuildable the moment that file moved.
-    """
-    return str(ICONS / f"{name}.png")
-
-INK = RGBColor(0x0F, 0x17, 0x2A)
-ORANGE = RGBColor(0xED, 0x71, 0x00)
-MUTED = RGBColor(0x94, 0xA3, 0xB8)
-BODY = RGBColor(0x47, 0x55, 0x69)
-DIM = RGBColor(0x64, 0x74, 0x8B)
-WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-
-CALLOUT_BG = RGBColor(0xFF, 0xF7, 0xED)
-CALLOUT_TX = RGBColor(0x7C, 0x2D, 0x12)
-DONE_BG = RGBColor(0xF0, 0xFD, 0xF4)
-DONE_TX = RGBColor(0x14, 0x53, 0x2D)
-WARN_BG = RGBColor(0xFE, 0xF2, 0xF2)
-WARN_TX = RGBColor(0x7F, 0x1D, 0x1D)
-
-FONT = "Segoe UI"
-
-prs = Presentation()
-prs.slide_width = Inches(13.333)
-prs.slide_height = Inches(7.5)
-BLANK = prs.slide_layouts[6]
-
-
-def slide():
-    s = prs.slides.add_slide(BLANK)
-    bg = s.background.fill
-    bg.solid()
-    bg.fore_color.rgb = WHITE
-    return s
-
-
-def text(s, x, y, w, h, content, size, colour, bold=False, spacing=1.15):
-    box = s.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    tf = box.text_frame
-    tf.word_wrap = True
-    for i, line in enumerate(content.split("\n")):
-        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.line_spacing = spacing
-        r = p.add_run()
-        r.text = line
-        r.font.size = Pt(size)
-        r.font.bold = bold
-        r.font.name = FONT
-        r.font.color.rgb = colour
-    return box
-
-
-def heading(s, eyebrow, title):
-    text(s, 0.85, 0.55, 11.6, 0.3, eyebrow, 11, MUTED, bold=True)
-    text(s, 0.85, 0.92, 11.6, 0.7, title, 31, INK, bold=True)
-    rule = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.85), Inches(1.72), Inches(1.1), Inches(0.04))
-    rule.fill.solid()
-    rule.fill.fore_color.rgb = ORANGE
-    rule.line.fill.background()
-    rule.shadow.inherit = False
-
-
-def callout(s, x, y, w, h, body, bg=CALLOUT_BG, tx=CALLOUT_TX, size=13.5):
-    box = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
-    box.fill.solid()
-    box.fill.fore_color.rgb = bg
-    box.line.fill.background()
-    box.shadow.inherit = False
-    box.adjustments[0] = 0.04
-    tb = text(s, x + 0.3, y + 0.2, w - 0.6, h - 0.4, body, size, tx, bold=True)
-    tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-    return box
-
-
-def table(s, x, y, w, rows, widths, sizes=11, header=True):
-    shape = s.shapes.add_table(len(rows), len(widths), Inches(x), Inches(y), Inches(w), Inches(0.32 * len(rows)))
-    t = shape.table
-    t.first_row = header
-    for i, cw in enumerate(widths):
-        t.columns[i].width = Inches(cw)
-    for r, row in enumerate(rows):
-        t.rows[r].height = Inches(0.32)
-        for c, val in enumerate(row):
-            cell = t.cell(r, c)
-            cell.text = str(val)
-            cell.margin_left = Inches(0.1)
-            cell.margin_right = Inches(0.08)
-            cell.margin_top = Inches(0.03)
-            cell.margin_bottom = Inches(0.03)
-            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-            cell.fill.solid()
-            cell.fill.fore_color.rgb = INK if (header and r == 0) else WHITE
-            p = cell.text_frame.paragraphs[0]
-            p.line_spacing = 1.0
-            for run in p.runs:
-                run.font.size = Pt(sizes)
-                run.font.name = FONT
-                run.font.bold = header and r == 0
-                run.font.color.rgb = WHITE if (header and r == 0) else BODY
-    return t
-
-
-# The board's colour code, so the deck teaches the same legend the Miro frame uses.
-ZONE = {
-    "new":      (RGBColor(0xDC, 0xFC, 0xE7), RGBColor(0x14, 0x53, 0x2D), RGBColor(0x16, 0xA3, 0x4A)),
-    "existing": (RGBColor(0xFE, 0xF3, 0xC7), RGBColor(0x78, 0x35, 0x0F), RGBColor(0xF5, 0x9E, 0x0B)),
-    "sandbox":  (RGBColor(0xFE, 0xE2, 0xE2), RGBColor(0x7F, 0x1D, 0x1D), RGBColor(0xDC, 0x26, 0x26)),
-    "data":     (RGBColor(0xDB, 0xEA, 0xFE), RGBColor(0x1E, 0x3A, 0x8A), RGBColor(0x3B, 0x82, 0xF6)),
-    "public":   (RGBColor(0xED, 0xE9, 0xFE), RGBColor(0x4C, 0x1D, 0x95), RGBColor(0x8C, 0x4F, 0xFF)),
-}
-
-
-def legend_card(s, x, y, w, icon_name, title_, sub, kind):
-    """One card in the board's own visual language: icon badge, name, role."""
-    bg, tx, line = ZONE[kind]
-    card = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(0.82))
-    card.fill.solid()
-    card.fill.fore_color.rgb = bg
-    card.line.color.rgb = line
-    card.line.width = Pt(1)
-    card.shadow.inherit = False
-    card.adjustments[0] = 0.08
-    s.shapes.add_picture(icon(icon_name), Inches(x + 0.14), Inches(y + 0.18), Inches(0.46), Inches(0.46))
-    text(s, x + 0.76, y + 0.11, w - 0.9, 0.28, title_, 13, tx, bold=True)
-    text(s, x + 0.76, y + 0.40, w - 0.9, 0.3, sub, 10.5, tx)
+OUT = Path(__file__).resolve().parent / "endless-phase-2.pptx"
+prs = deck()
 
 
 # ---------------------------------------------------------------- 1. title
-s = slide()
+s = slide(prs)
 s.background.fill.solid()
 s.background.fill.fore_color.rgb = INK
 bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(0.28), Inches(7.5))
@@ -180,7 +56,7 @@ text(s, 1.1, 6.4, 11.5, 0.3,
      "Done when you would let a stranger's agent trust the ranking unsupervised.", 11.5, DIM)
 
 # ---------------------------------------------------------------- 2. about
-s = slide()
+s = slide(prs)
 heading(s, "ABOUT THIS PHASE", "What Phase 2 is for")
 text(s, 0.85, 2.0, 5.5, 3.4,
      "Phase 0 proved the loop could be measured.\n"
@@ -205,7 +81,7 @@ text(s, 6.95, 3.75, 5.3, 2.6,
      "exactly the half you need to watch.", 14, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 3. starting point
-s = slide()
+s = slide(prs)
 heading(s, "STARTING POINT", "What Phase 1 leaves behind")
 table(s, 0.85, 2.0, 11.5, [
     ["", "State at the end of Phase 1"],
@@ -227,7 +103,7 @@ text(s, 0.85, 6.2, 11.5, 0.8,
      "served on the open internet because a comment asserted it was not.", 12.5, DIM, spacing=1.25)
 
 # ---------------------------------------------------------------- 4. scope
-s = slide()
+s = slide(prs)
 heading(s, "SCOPE", "What Phase 2 adds, and what it does not")
 table(s, 0.85, 1.95, 11.5, [
     ["Adds", "Leaves alone"],
@@ -249,7 +125,7 @@ text(s, 0.85, 5.9, 11.5, 1.1,
      "because changing ranking changes what Phase 0 measured.", 12.5, DIM, spacing=1.25)
 
 # ---------------------------------------------------------------- 5. architecture
-s = slide()
+s = slide(prs)
 heading(s, "ARCHITECTURE", "What changes, and where")
 table(s, 0.85, 1.95, 11.5, [
     ["Component", "Phase 2 change"],
@@ -270,7 +146,7 @@ text(s, 0.85, 5.9, 11.5, 1.0,
      "change and the whole of history is rescored under it.", 12.5, DIM, spacing=1.25)
 
 # ---------------------------------------------------------------- 6. board layout
-s = slide()
+s = slide(prs)
 heading(s, "THE BOARD", "Where the Phase 2 frame sits")
 text(s, 0.85, 1.95, 11.4, 0.4, "miro.com/app/board/uXjVHpGFCos=", 15, ORANGE, bold=True)
 table(s, 0.85, 2.5, 11.5, [
@@ -289,7 +165,7 @@ text(s, 0.85, 4.05, 11.5, 2.8,
      "components that did not change sit directly above their Phase 2 selves.", 13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 7. board legend
-s = slide()
+s = slide(prs)
 heading(s, "THE BOARD", "Reading the Phase 2 frame")
 text(s, 0.85, 1.95, 6.5, 4.5,
      "Icons are real AWS assets. Each service carries its official icon as a\n"
@@ -313,7 +189,7 @@ legend_card(s, 7.75, 5.68, 4.6, "cloudfront", "gaps board", "public — counts, 
 text(s, 7.75, 6.65, 4.6, 0.3, "The card convention used on the board", 11, DIM)
 
 # ---------------------------------------------------------------- 8. moons
-s = slide()
+s = slide(prs)
 heading(s, "FIRST DECISION — BUILT", "Moons: a tool never calls a tool")
 text(s, 0.85, 2.0, 6.0, 1.15,
      "A handler cannot reach the registry any more than it can reach\n"
@@ -342,7 +218,7 @@ text(s, 0.85, 6.3, 6.0, 0.9,
      "that opens no connection.", 12.5, DIM, spacing=1.25)
 
 # ---------------------------------------------------------------- 9. scoring
-s = slide()
+s = slide(prs)
 heading(s, "SECOND DECISION", "Three numbers, kept apart")
 table(s, 0.85, 1.95, 11.5, [
     ["", "What it measures", "Why it is separate"],
@@ -363,7 +239,7 @@ text(s, 0.85, 5.1, 11.5, 1.9,
      13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 10. lifecycle
-s = slide()
+s = slide(prs)
 heading(s, "THIRD DECISION", "Decay, the floor, and the difference from takedown")
 table(s, 0.85, 1.95, 11.5, [
     ["", "What happens", "Reversible?"],
@@ -382,7 +258,7 @@ text(s, 0.85, 5.2, 11.5, 1.8,
      "It is the parameter in this phase most likely to be wrong on the first attempt.", 13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 11. the hard part
-s = slide()
+s = slide(prs)
 heading(s, "THE HARD PART", "Every number here is a fitted curve")
 text(s, 0.85, 2.0, 11.5, 1.2,
      "Decay half-life. Dependency damping. The brightness floor. How much a dependent is worth.\n"
@@ -402,7 +278,7 @@ text(s, 0.85, 4.65, 11.5, 2.3,
      13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 12. money
-s = slide()
+s = slide(prs)
 heading(s, "THE INVARIANT UNDER TEST", "Money never reaches agent-facing ranking")
 table(s, 0.85, 1.95, 11.5, [
     ["Phase 2 paid product", "What it buys", "Touches ranking?"],
@@ -422,7 +298,7 @@ text(s, 0.85, 4.5, 11.5, 2.4,
      13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 13. plan
-s = slide()
+s = slide(prs)
 heading(s, "PLAN", "Eight issues")
 text(s, 0.85, 1.95, 11.4, 0.4, "Estimates for one developer. #1 is done.", 15, BODY)
 table(s, 0.85, 2.45, 11.5, [
@@ -442,7 +318,7 @@ callout(s, 0.85, 5.55, 11.5, 1.35,
         "not before it.", size=13.5)
 
 # ---------------------------------------------------------------- 14. sequencing
-s = slide()
+s = slide(prs)
 heading(s, "SEQUENCING", "What blocks what")
 text(s, 0.85, 2.05, 11.5, 0.5,
      "#1 Moons  →  #2 Brightness  ·  #3 Dependency weight  →  #4 Decay  →  #5 Stasis  →  #6 Anti-gaming  →  #7 Bounties",
@@ -461,7 +337,7 @@ text(s, 0.85, 2.85, 11.5, 4.0,
      13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 15. cost
-s = slide()
+s = slide(prs)
 heading(s, "COST", "What Phase 2 adds to the bill")
 table(s, 0.85, 1.95, 11.5, [
     ["", "Phase 1 measured", "Phase 2 effect"],
@@ -481,7 +357,7 @@ text(s, 0.85, 5.15, 11.5, 1.85,
      13, BODY, spacing=1.3)
 
 # ---------------------------------------------------------------- 16. risks
-s = slide()
+s = slide(prs)
 heading(s, "RISKS", "What could go wrong")
 table(s, 0.85, 1.95, 11.5, [
     ["Risk", "Why it bites here"],
@@ -502,7 +378,7 @@ text(s, 0.85, 5.75, 11.5, 1.2,
      "measured against the simulation rather than assumed to transfer.", 12.5, DIM, spacing=1.25)
 
 # ---------------------------------------------------------------- 17. the gate
-s = slide()
+s = slide(prs)
 heading(s, "THE GATE", "What would prove Phase 2")
 text(s, 0.85, 2.0, 11.5, 0.6,
      "Phase 0's gate passed while a third of answerable queries were being logged as unmet needs, because the\n"
@@ -522,7 +398,7 @@ text(s, 0.85, 6.2, 11.5, 0.8,
      "The gate clears, or a written finding says why it does not — as in both previous phases.", 12.5, DIM)
 
 # ---------------------------------------------------------------- 18. start here
-s = slide()
+s = slide(prs)
 heading(s, "START HERE", "The first four moves")
 rows = [
     ("1", "Brightness (#2)", "Success rate and latency are already in the event log. It is the cheapest real\nnumber in the phase and it needs no new data."),
@@ -553,4 +429,9 @@ callout(s, 0.85, 6.75, 11.5, 0.6,
         "Unchanged and unaffected by any of this: minting a caller still costs nothing.", size=13)
 
 prs.save(OUT)
-print(f"wrote {OUT} — {len(prs.slides.__iter__.__self__._sldIdLst)} slides")
+problems = verify(OUT)
+print(f"wrote {OUT.name} — {len(prs.slides._sldIdLst)} slides")
+for p in problems:
+    print(f"  LAYOUT: {p}")
+if not problems:
+    print("  no overflow, no overlap")
