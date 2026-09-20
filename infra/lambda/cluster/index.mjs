@@ -22,7 +22,10 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createHash } from "node:crypto";
 import { unpackVector } from "./vector.mjs";
 import { cluster, summarise, assess, RULE, DEFAULT_SIMILARITY } from "./cluster.mjs";
-import { scoreTools, assertNoPaidInputs, ownershipTrustworthy, DEPENDENCY_DAMPING } from "./mass.mjs";
+import { scoreTools, assertNoPaidInputs, ownershipTrustworthy, DEPENDENCY_DAMPING, isCountable } from "./mass.mjs";
+import {
+  competitionClusters, decayOf, BASE_HALF_LIFE_DAYS, STANDING_WINDOW_DAYS,
+} from "./decay.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -75,6 +78,8 @@ async function scanAll(table, project) {
 async function computeMass() {
   const events = await scanAll(EVENTS, (i) => ({
     type: i.type, tool_id: i.tool_id, outcome: i.outcome, ms: i.ms, ts: i.ts,
+    // The shortlist a search returned, which is how competition is read.
+    ranked: i.ranked ?? null,
     caller_id: i.caller_id ?? null, owner: i.owner ?? null,
     actor_verified: i.actor_verified === true, self_call: i.self_call === true,
     // The dependency edge. Phase 2 reads the graph off the log rather than off
@@ -96,13 +101,42 @@ async function computeMass() {
 
   // Tool rows rather than ids: dependency weight needs to know who owns what,
   // to refuse standing earned by depending on your own tool.
+  // Who competes with whom, read off the search log rather than off categories
+  // or descriptions. See decay.mjs for why neither of those works.
+  const clusters = competitionClusters(events.filter((e) => e.type === "search" && e.ranked));
+  const clusterOf = new Map();
+  for (const c of clusters) for (const id of c) clusterOf.set(id, c);
+
+  // Standing is judged over a recent window, so a tool is compared against what
+  // its rivals are doing now rather than against their whole history.
+  const now = Date.now();
+  const windowStart = now - STANDING_WINDOW_DAYS * 86_400_000;
+  const recentMass = new Map();
+  const callTimes = new Map();
+  for (const e of events) {
+    if (!isCountable(e) || e.outcome !== "success" || e.via_tool) continue;
+    const t = Date.parse(e.ts);
+    if (!Number.isFinite(t)) continue;
+    if (!callTimes.has(e.tool_id)) callTimes.set(e.tool_id, []);
+    callTimes.get(e.tool_id).push(t);
+    if (t >= windowStart) recentMass.set(e.tool_id, (recentMass.get(e.tool_id) ?? 0) + 1);
+  }
+
   const rows = scoreTools([...latest.values()], events).map((row) => {
     const t = latest.get(row.tool_id);
     // Invariant #3, enforced rather than asserted: if a ranking input ever
     // arrives that came from a payment, this throws and the run fails loudly
     // instead of quietly publishing a bought ranking.
+    const decay = decayOf({
+      toolId: row.tool_id,
+      callTimes: callTimes.get(row.tool_id) ?? [],
+      cluster: clusterOf.get(row.tool_id) ?? null,
+      recentMass,
+      now,
+    });
+
     return assertNoPaidInputs({
-      ...row, name: t.name ?? null, version: t.version,
+      ...row, ...decay, name: t.name ?? null, version: t.version,
       // False means the self_call figure above cannot be relied on for this
       // tool, because its owner string was never checked against a caller.
       ownership_verified: ownershipTrustworthy(t),
@@ -111,15 +145,19 @@ async function computeMass() {
 
   return {
     generated_at: new Date().toISOString(),
-    scoring: "mass, brightness and dependency weight — computed apart, never blended",
+    scoring: "mass, brightness, dependency weight and decay — computed apart, never blended",
     // Said in the artefact, not only in the docs, because this is the file
     // anything downstream will read.
     note: "Mass is successful, verified, non-self DIRECT calls; a call arriving via another tool is dependency weight instead. Brightness is a Wilson lower bound on the success rate, so evidence must accumulate before it does. Dependency weight flows from a dependent's own direct mass and is refused when the dependent shares an owner. Recomputed from the event log; nothing is accumulated. No paid input touches any of it.",
     damping: DEPENDENCY_DAMPING,
+    half_life_days: BASE_HALF_LIFE_DAYS,
+    decay_note: "Decay is relative to the tools a search returns alongside this one, not to the calendar. A cluster that goes quiet together puts nobody behind, which is what stops a seasonal tool and a quiet niche being archived for being small. A tool with no known rivals sits at par: not knowing who competes is not evidence that somebody is losing.",
     tools_total: rows.length,
     tools_with_usage: rows.filter((r) => r.mass > 0).length,
     tools_with_unverified_ownership: rows.filter((r) => !r.ownership_verified).length,
     tools_depended_on: rows.filter((r) => r.dependents > 0).length,
+    tools_archived: rows.filter((r) => r.archived).length,
+    competition_clusters: clusters.length,
     events_scanned: events.length,
     simulated_excluded: events.filter((e) => e.simulated).length,
     tools: rows,

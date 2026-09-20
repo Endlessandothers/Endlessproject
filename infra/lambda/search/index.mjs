@@ -209,6 +209,18 @@ export const handler = async (event) => {
         event_id: randomUUID(), ts, day, type: "search",
         ...provenance,
         query, top_score: top, result_count: results.length,
+        // Which tools came back together, best first. Ids only, and written on
+        // EVERY search rather than only on gaps.
+        //
+        // This is the raw material for knowing which tools COMPETE. Two tools
+        // that keep appearing in the same shortlist are candidates for the same
+        // job, whatever their descriptions say and whatever category someone
+        // filed them under. Measured 2026-09-20: description similarity
+        // recovers hand-assigned categories at F1 0.565, nowhere near good
+        // enough to decide anything — sunrise-sunset and postal-code-lookup are
+        // both filed "geo" and do unrelated things, while air-quality and
+        // weather-forecast are close neighbours filed apart.
+        ranked: results.map((r) => r.tool_id),
         embed_tokens: tokens, embed_model: MODEL,
       },
     }));
