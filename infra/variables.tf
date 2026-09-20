@@ -85,6 +85,18 @@ variable "cluster_schedule" {
   default     = "cron(15 3 * * ? *)"
 }
 
+variable "app_image_tag" {
+  description = "Which endless-app image the Fargate task runs. Bump it after pushing a new one; a tag rather than a digest so a redeploy is one variable change."
+  type        = string
+  default     = "v1"
+}
+
+variable "app_desired_count" {
+  description = "How many app tasks run. This is the off switch: set it to 0 and the Fargate bill stops, while the VPC, the repository and the task definition all keep costing nothing. One 0.25 vCPU task is roughly $9 a month and is billed whether anyone visits or not — the first thing in this project to leave the free tier."
+  type        = number
+  default     = 1
+}
+
 variable "mcp_flood_threshold" {
   description = "Invocations of the public MCP endpoint in five minutes that trip the kill switch. Far above anything real traffic does today: the whole blind-set replay was 35 requests, and the account's concurrency ceiling of 10 caps a flood near 500/sec, so this fires within a minute of one starting. Revisit when there is real traffic to revisit it against."
   type        = number
