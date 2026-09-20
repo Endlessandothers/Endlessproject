@@ -261,7 +261,13 @@ export function scoreTools(tools, events, damping = DEPENDENCY_DAMPING) {
 // Asserted here rather than only in prose. If a scoring input ever arrives that
 // came from a payment, this is where it gets caught — the check is cheap and the
 // invariant is the reason an agent can trust the ranking at all.
-const FORBIDDEN_INPUTS = ["credits", "paid", "sponsored", "expedited", "tier", "price"];
+// Named substrings rather than exact keys, so a field has to actively avoid
+// looking like money to slip through. "stasis" is here because it is the first
+// paid product that touches how a tool is SEEN — it belongs in world.json and
+// must never arrive in a scored row.
+const FORBIDDEN_INPUTS = [
+  "credits", "paid", "sponsored", "expedited", "tier", "price", "stasis",
+];
 
 export function assertNoPaidInputs(row) {
   const found = Object.keys(row).filter((k) =>

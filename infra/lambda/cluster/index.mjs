@@ -18,7 +18,7 @@
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { createHash } from "node:crypto";
 import { unpackVector } from "./vector.mjs";
 import { cluster, summarise, assess, RULE, DEFAULT_SIMILARITY } from "./cluster.mjs";
@@ -26,6 +26,7 @@ import { scoreTools, assertNoPaidInputs, ownershipTrustworthy, DEPENDENCY_DAMPIN
 import {
   competitionClusters, decayOf, BASE_HALF_LIFE_DAYS, STANDING_WINDOW_DAYS,
 } from "./decay.mjs";
+import { buildWorld } from "./world.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -164,6 +165,16 @@ async function computeMass() {
   };
 }
 
+// The paid state. Absent until somebody buys something, which is not an error.
+async function loadStasis() {
+  try {
+    const out = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: "stasis.json" }));
+    return JSON.parse(await out.Body.transformToString()).tools ?? {};
+  } catch {
+    return {};
+  }
+}
+
 // A stable id, so the same need keeps the same URL between nightly runs even as
 // members are added. Derived from the label rather than from a random id, which
 // would make every run look like a new set of gaps to anyone linking to one.
@@ -250,6 +261,26 @@ export const handler = async () => {
   }
 
   const mass = await computeMass();
+
+  // THE WORLD VIEW, built last and kept in its own file.
+  //
+  // Stasis is advertising: it holds a creator's star visible to people after
+  // usage drops, and buys nothing in the phantom layer. The paid state is read
+  // HERE and nowhere else, from an object no part of the agent path touches, so
+  // a paid field cannot reach a ranking through somebody forgetting it exists.
+  // See world.mjs and cli/stasis.mjs.
+  const stasis = await loadStasis();
+  const world = buildWorld(mass.tools, stasis);
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET, Key: "world.json",
+    Body: JSON.stringify(world, null, 2),
+    ContentType: "application/json",
+    CacheControl: "public, max-age=300",
+  }));
+  console.log(JSON.stringify({
+    metric: "world_run", bodies: world.bodies_total, stars: world.stars, sponsored: world.sponsored,
+  }));
+
   await s3.send(new PutObjectCommand({
     Bucket: BUCKET,
     Key: "tools.json",

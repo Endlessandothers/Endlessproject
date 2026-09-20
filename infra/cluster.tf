@@ -120,7 +120,20 @@ data "aws_iam_policy_document" "cluster" {
       # allowlists the three objects CloudFront may serve, and this is not one
       # of them. It was briefly public when that policy was a wildcard.
       "${aws_s3_bucket.board.arn}/sim-gaps.json",
+      # What the 3D world renders, including which stars are held up by money.
+      # A separate object from tools.json on purpose: the agent-facing artefact
+      # does not CONTAIN the paid state, so consuming it by accident is not
+      # possible rather than merely discouraged. See lambda/cluster/world.mjs.
+      "${aws_s3_bucket.board.arn}/world.json",
     ]
+  }
+
+  # Read-only on the paid state, and on nothing else in the bucket. The nightly
+  # job renders stasis into the world; it can never sell any.
+  statement {
+    sid       = "ReadStasis"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.board.arn}/stasis.json"]
   }
 
   statement {

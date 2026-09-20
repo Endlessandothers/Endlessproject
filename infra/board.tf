@@ -64,7 +64,7 @@ resource "aws_cloudfront_distribution" "board" {
   }
 }
 
-# Only this distribution may read the bucket, and only these three objects.
+# Only this distribution may read the bucket, and only these four objects.
 #
 # NAMED INDIVIDUALLY, not "/*". The bucket also holds sim-gaps.json, which
 # carries caller identities for analysis — and with a wildcard policy CloudFront
@@ -74,7 +74,8 @@ resource "aws_cloudfront_distribution" "board" {
 #
 # So the public surface is an allowlist of objects rather than a bucket with
 # things in it that are hoped to stay unnoticed. Anything added to this bucket
-# is private until someone deliberately names it here.
+# is private until someone deliberately names it here — stasis.json, the paid
+# state, is not named and is not served.
 data "aws_iam_policy_document" "board_bucket" {
   statement {
     sid     = "AllowCloudFrontReadPublishedObjects"
@@ -83,6 +84,9 @@ data "aws_iam_policy_document" "board_bucket" {
       "${aws_s3_bucket.board.arn}/index.html",
       "${aws_s3_bucket.board.arn}/gaps.json",
       "${aws_s3_bucket.board.arn}/tools.json",
+      # The world view. Public because the 3D world renders it, and it labels
+      # every star held up by money in the same object that shines it.
+      "${aws_s3_bucket.board.arn}/world.json",
     ]
 
     principals {
