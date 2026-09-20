@@ -9,12 +9,22 @@
 
 // Two gaps are the same need when their query vectors are this close.
 //
-// Titan V2 cosine sits near zero — a correct retrieval hit measured 0.0595 and
-// unrelated tools -0.007 to 0.046 (see vector.mjs). Query-to-query similarity
-// is a different distribution from query-to-tool and cannot borrow that number.
-// This default is provisional and deriving it is part of #9; the harness in
-// cluster-report.mjs prints the distribution needed to set it from data.
-export const DEFAULT_SIMILARITY = 0.5;
+// DERIVED from the frozen blind set in sim/, 2026-09-20, by sweeping against
+// labels written before the run. Not guessed, and not fitted to whatever the
+// clustering happened to produce.
+//
+// The important finding is that the two populations OVERLAP: similarity within
+// a need ran 0.171–0.834 (p05 0.191) and across needs -0.051–0.337 (p95 0.238).
+// There is no value that separates them perfectly, so the question is not where
+// the line is but which error to prefer.
+//
+// 0.35 makes ZERO wrong merges on the set while wrongly splitting 5 of 30
+// same-need pairs. That is the safe direction: a split need is under-counted
+// and may fall below the bar, whereas a merge invents one large need out of two
+// smaller ones and would send a builder at the wrong problem. Under-reporting
+// demand is recoverable; reporting demand that does not exist is the failure
+// this whole subsystem was built to avoid.
+export const DEFAULT_SIMILARITY = 0.35;
 
 const dot = (a, b) => {
   let d = 0;
@@ -164,8 +174,11 @@ export function excludeBeneficiary(summary, beneficiaryOwner) {
 // reported so a reader can disagree with the verdict rather than having to
 // trust it.
 //
-// MIN_CALLERS is provisional and says so. It cannot be derived from one gap
-// row; #13 must report the distribution and set it from data, exactly as T was.
+// MIN_CALLERS was swept against the blind set on 2026-09-20 and KEPT AT 3.
+// At every bar from 1 to 5, the needs shown were exactly those labelled as
+// having that many owners — no need was ever shown on less evidence than it
+// had. So the sweep does not force a value, and 3 is retained because it is
+// the more conservative reading of a set that is small and synthetic.
 export const RULE = {
   min_callers: 3,
   min_spread_days: 1,

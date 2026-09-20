@@ -1,0 +1,126 @@
+{
+  "version": "1.0",
+  "written": "2026-09-20",
+  "note": "Twelve simulated strangers. Frozen before any run: sim/personas.sha256 is checked by run.mjs and analyse.mjs, and a mismatch refuses to report numbers. Requests are written as people actually type them - vague, abbreviated, occasionally misspelled - because a product that only works on clean queries has not been tested. day is an offset in days back from the run; two people with the same need do not have it on the same afternoon.",
+  "personas": [
+    {
+      "caller_id": "sim-mara",
+      "owner": "sim-owner-mara",
+      "role": "paralegal automating contract intake",
+      "requests": [
+        { "day": 11, "text": "i need to pull all the deadlines out of a contract pdf" },
+        { "day": 9,  "text": "get key dates from a pdf agreement" },
+        { "day": 4,  "text": "whats the exchange rate from gbp to eur right now" }
+      ]
+    },
+    {
+      "caller_id": "sim-theo",
+      "owner": "sim-owner-theo",
+      "role": "solo founder wiring up an ops assistant",
+      "requests": [
+        { "day": 10, "text": "extract the important dates and obligations from a pdf contract" },
+        { "day": 8,  "text": "turn a photo of a receipt into a row i can put in a spreadsheet" },
+        { "day": 3,  "text": "is my site down or is it just me" }
+      ]
+    },
+    {
+      "caller_id": "sim-priya",
+      "owner": "sim-owner-priya",
+      "role": "research assistant",
+      "requests": [
+        { "day": 7,  "text": "read a pdf and tell me every deadline mentioned in it" },
+        { "day": 6,  "text": "summarise a meeting transcript into action items with owners" },
+        { "day": 2,  "text": "find papers by doi" }
+      ]
+    },
+    {
+      "caller_id": "sim-kwame",
+      "owner": "sim-owner-kwame",
+      "role": "bookkeeper",
+      "requests": [
+        { "day": 9,  "text": "scan a receipt image and give me date amount and vendor as json" },
+        { "day": 5,  "text": "convert 400 usd to naira" },
+        { "day": 1,  "text": "receipt photo to structured data" }
+      ]
+    },
+    {
+      "caller_id": "sim-lena",
+      "owner": "sim-owner-lena",
+      "role": "project manager",
+      "requests": [
+        { "day": 8,  "text": "take meeting notes and pull out who agreed to do what" },
+        { "day": 5,  "text": "turn a call transcript into a list of action items" },
+        { "day": 2,  "text": "what will the weather be tomorrow in lisbon" }
+      ]
+    },
+    {
+      "caller_id": "sim-oscar",
+      "owner": "sim-owner-oscar",
+      "role": "ops engineer",
+      "requests": [
+        { "day": 10, "text": "check whether a website is up or down" },
+        { "day": 6,  "text": "is example.com responding" },
+        { "day": 1,  "text": "who owns this domain and when does it expire" }
+      ]
+    },
+    {
+      "caller_id": "sim-hana",
+      "owner": "sim-owner-hana",
+      "role": "localisation coordinator",
+      "requests": [
+        { "day": 7,  "text": "translate a subtitle file into spanish keeping the timings" },
+        { "day": 4,  "text": "translate srt subtitles to another language" },
+        { "day": 2,  "text": "current time in tokyo" }
+      ]
+    },
+    {
+      "caller_id": "sim-dmitri",
+      "owner": "sim-owner-dmitri",
+      "role": "journalist",
+      "requests": [
+        { "day": 6,  "text": "look up a company in the uk register and get its officers" },
+        { "day": 3,  "text": "find the registered address and directors of a limited company" },
+        { "day": 1,  "text": "recent earthquakes near a location" }
+      ]
+    },
+    {
+      "caller_id": "sim-yusuf",
+      "owner": "sim-owner-yusuf",
+      "role": "data analyst",
+      "requests": [
+        { "day": 9,  "text": "extract the text from a scanned image so i can search it" },
+        { "day": 4,  "text": "ocr a scanned document into plain text" },
+        { "day": 2,  "text": "gdp per capita for kenya over the last ten years" }
+      ]
+    },
+    {
+      "caller_id": "sim-bea",
+      "owner": "sim-owner-bea",
+      "role": "small agency owner",
+      "requests": [
+        { "day": 8,  "text": "turn a photo of a reciept into a spreadsheet line" },
+        { "day": 3,  "text": "translate subtitles for a video into french" },
+        { "day": 1,  "text": "generate a qr code for a url" }
+      ]
+    },
+    {
+      "caller_id": "sim-noor",
+      "owner": "sim-owner-noor",
+      "role": "compliance analyst",
+      "requests": [
+        { "day": 5,  "text": "pull renewal and termination dates out of a pdf lease" },
+        { "day": 3,  "text": "check if a website is reachable from outside" }
+      ]
+    },
+    {
+      "caller_id": "sim-idris",
+      "owner": "sim-owner-idris",
+      "role": "one-off user, no pattern",
+      "requests": [
+        { "day": 6,  "text": "how tall is the ground at these coordinates" },
+        { "day": 4,  "text": "nutrition facts for a barcode" },
+        { "day": 2,  "text": "what public holidays are coming up in germany" }
+      ]
+    }
+  ]
+}

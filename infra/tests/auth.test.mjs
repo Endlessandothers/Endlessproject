@@ -175,6 +175,22 @@ test("provenance survives a caller row with nothing optional on it", () => {
   const p = provenanceOf({ caller_id: "bare" }, null);
   assert.deepEqual(p, {
     caller_id: "bare", owner: null, caller_created_at: null,
-    actor_verified: true, actor: null,
+    actor_verified: true, actor: null, simulated: false,
   });
+});
+
+// Simulated traffic runs through every real code path, so the only thing
+// keeping invented demand off the public board is this flag being written
+// truthfully. It comes from the caller row, which only an operator can set.
+test("the simulated flag comes from the caller, never from the request", () => {
+  const sim = provenanceOf({ caller_id: "sim-mara", simulated: true }, null);
+  assert.equal(sim.simulated, true);
+
+  // A caller trying to declare itself real, or a real caller trying to hide
+  // its traffic as simulated, changes nothing.
+  const liar = provenanceOf({ caller_id: "real" }, { simulated: true, agent_id: "a", session_id: "s" });
+  assert.equal(liar.simulated, false);
+
+  // Only exactly true counts. A truthy string does not quarantine anything.
+  assert.equal(provenanceOf({ caller_id: "x", simulated: "yes" }, null).simulated, false);
 });

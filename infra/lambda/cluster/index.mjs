@@ -47,6 +47,7 @@ async function loadGaps() {
         owner: item.owner ?? null,
         caller_created_at: item.caller_created_at ?? null,
         actor_verified: item.actor_verified === true,
+        simulated: item.simulated === true,
         reason: item.reason,
         // Gaps logged before vectors were stored have none. cluster() drops
         // them rather than guessing where they belong.
@@ -120,18 +121,30 @@ async function computeMass() {
 // would make every run look like a new set of gaps to anyone linking to one.
 const clusterId = (label) => createHash("sha256").update(label).digest("hex").slice(0, 12);
 
-export const handler = async () => {
-  const started = Date.now();
-  const gaps = await loadGaps();
-  const groups = cluster(gaps, SIMILARITY);
-
-  const clusters = groups
+const buildClusters = (gaps) =>
+  cluster(gaps, SIMILARITY)
     .map((members) => {
       const summary = summarise(members);
       const verdict = assess(summary);
       return { id: clusterId(summary.label), ...summary, ...verdict };
     })
     .sort((a, b) => b.distinct_callers - a.distinct_callers || b.occurrences - a.occurrences);
+
+export const handler = async () => {
+  const started = Date.now();
+  const all = await loadGaps();
+
+  // Two populations, never mixed.
+  //
+  // Simulated traffic runs through every real code path so that what is being
+  // tested is the product. Its demand is still invented, and the public board
+  // is a claim about what people actually need — so the split happens here,
+  // before anything is published, rather than being left to whoever reads it.
+  const gaps = all.filter((g) => !g.simulated);
+  const simulated = all.filter((g) => g.simulated);
+
+  const clusters = buildClusters(gaps);
+  const clustered = clusters.reduce((n, c) => n + c.occurrences, 0);
 
   // WHAT THE PUBLIC SEES. Counts, never identities.
   //
@@ -142,8 +155,11 @@ export const handler = async () => {
   const publicView = {
     generated_at: new Date().toISOString(),
     gaps_total: gaps.length,
-    gaps_clustered: groups.flat().length,
-    gaps_without_vector: gaps.length - groups.flat().length,
+    simulated_excluded: simulated.length,
+    // Counted from the clusters rather than from a second pass, so the two
+    // figures cannot disagree.
+    gaps_clustered: clustered,
+    gaps_without_vector: gaps.length - clustered,
     clusters_total: clusters.length,
     clusters_confirmed: clusters.filter((c) => c.confirmed).length,
     rule: { ...RULE, similarity: SIMILARITY },
@@ -159,6 +175,31 @@ export const handler = async () => {
     // quietly stops being evidence of anything.
     CacheControl: "public, max-age=300",
   }));
+
+  // The simulation's own snapshot, written only when there is simulated
+  // traffic. Same code, same rules, separate file — sim/analyse.mjs reads this
+  // to derive the thresholds the real board depends on.
+  if (simulated.length) {
+    const simClusters = buildClusters(simulated);
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: "sim-gaps.json",
+      Body: JSON.stringify({
+        generated_at: new Date().toISOString(),
+        warning: "SIMULATED TRAFFIC. Invented demand from a blind test set. Not evidence of anything anyone needs.",
+        gaps_total: simulated.length,
+        clusters_total: simClusters.length,
+        clusters_confirmed: simClusters.filter((c) => c.confirmed).length,
+        rule: { ...RULE, similarity: SIMILARITY },
+        // Caller identities ARE kept here, unlike the public board: the
+        // analysis has to check which caller landed in which cluster, and this
+        // file is never served to anyone.
+        clusters: simClusters,
+      }, null, 2),
+      ContentType: "application/json",
+      CacheControl: "no-store",
+    }));
+  }
 
   const mass = await computeMass();
   await s3.send(new PutObjectCommand({
@@ -180,6 +221,7 @@ export const handler = async () => {
     gaps: gaps.length,
     clusters: clusters.length,
     confirmed: publicView.clusters_confirmed,
+    simulated_excluded: simulated.length,
   }));
 
   return {

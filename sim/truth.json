@@ -1,0 +1,133 @@
+{
+  "version": "1.0",
+  "labelled": "2026-09-20",
+  "personas_sha256": "eea1a54ff73e3aa7ccbb55c2422547e5d1f37e23a31cb7485d4864512bacaaf9",
+  "note": "Ground truth for the blind set: which requests are the same underlying need. Written at the same time as personas.json and before any run, so the clustering is scored against a fixed answer rather than against whatever it happened to produce. A need with two or more DIFFERENT owners is one a correct system should eventually surface; a need held by one owner, however often they ask, must never be.",
+  "needs": [
+    {
+      "id": "pdf-dates",
+      "description": "Extract deadlines and key dates from a PDF contract or lease",
+      "expected_distinct_owners": 4,
+      "requests": [
+        "i need to pull all the deadlines out of a contract pdf",
+        "get key dates from a pdf agreement",
+        "extract the important dates and obligations from a pdf contract",
+        "read a pdf and tell me every deadline mentioned in it",
+        "pull renewal and termination dates out of a pdf lease"
+      ]
+    },
+    {
+      "id": "receipt-to-row",
+      "description": "Turn a photograph of a receipt into structured fields",
+      "expected_distinct_owners": 3,
+      "requests": [
+        "turn a photo of a receipt into a row i can put in a spreadsheet",
+        "scan a receipt image and give me date amount and vendor as json",
+        "receipt photo to structured data",
+        "turn a photo of a reciept into a spreadsheet line"
+      ]
+    },
+    {
+      "id": "transcript-actions",
+      "description": "Turn a meeting transcript into action items with owners",
+      "expected_distinct_owners": 2,
+      "requests": [
+        "summarise a meeting transcript into action items with owners",
+        "take meeting notes and pull out who agreed to do what",
+        "turn a call transcript into a list of action items"
+      ]
+    },
+    {
+      "id": "site-up",
+      "description": "Check whether a website is reachable",
+      "expected_distinct_owners": 3,
+      "requests": [
+        "is my site down or is it just me",
+        "check whether a website is up or down",
+        "is example.com responding",
+        "check if a website is reachable from outside"
+      ]
+    },
+    {
+      "id": "subtitles",
+      "description": "Translate a subtitle file, preserving timings",
+      "expected_distinct_owners": 2,
+      "requests": [
+        "translate a subtitle file into spanish keeping the timings",
+        "translate srt subtitles to another language",
+        "translate subtitles for a video into french"
+      ]
+    },
+    {
+      "id": "company-register",
+      "description": "Look up a registered company's officers and address",
+      "expected_distinct_owners": 1,
+      "requests": [
+        "look up a company in the uk register and get its officers",
+        "find the registered address and directors of a limited company"
+      ]
+    },
+    {
+      "id": "ocr",
+      "description": "Extract text from a scanned image",
+      "expected_distinct_owners": 1,
+      "requests": [
+        "extract the text from a scanned image so i can search it",
+        "ocr a scanned document into plain text"
+      ]
+    },
+    {
+      "id": "domain-whois",
+      "description": "Find who owns a domain and when it expires",
+      "expected_distinct_owners": 1,
+      "requests": [
+        "who owns this domain and when does it expire"
+      ]
+    }
+  ],
+  "singletons": [
+    "whats the exchange rate from gbp to eur right now",
+    "convert 400 usd to naira",
+    "what will the weather be tomorrow in lisbon",
+    "current time in tokyo",
+    "find papers by doi",
+    "recent earthquakes near a location",
+    "gdp per capita for kenya over the last ten years",
+    "generate a qr code for a url",
+    "how tall is the ground at these coordinates",
+    "nutrition facts for a barcode",
+    "what public holidays are coming up in germany"
+  ],
+  "hard_pairs": [
+    {
+      "a": "ocr",
+      "b": "receipt-to-row",
+      "why": "Both are reading text off an image. A system that merges them would report one need where there are two, and a builder would close the wrong one."
+    },
+    {
+      "a": "site-up",
+      "b": "domain-whois",
+      "why": "Both are 'look something up about a website'. Different needs entirely; one is availability, the other is registration."
+    },
+    {
+      "a": "pdf-dates",
+      "b": "ocr",
+      "why": "Both extract content from a document. Merging them would hide a real need behind a more common one."
+    },
+    {
+      "a": "pdf-dates",
+      "b": "transcript-actions",
+      "why": "Both are 'summarise a document into the bits that matter'. The closest legitimate pair in the set."
+    }
+  ],
+  "what_this_measures": [
+    "Whether clustering recovers the needs that were written down before it ran.",
+    "Whether it keeps the hard pairs apart, which is where a single threshold fails.",
+    "The similarity distribution within a need against the distribution across needs - the gap between them is what a threshold can be set from, and if they overlap there is no correct threshold to find.",
+    "Whether the distinct-owner counts come out as labelled, which is the anti-manufacturing rule working."
+  ],
+  "what_this_does_not_measure": [
+    "Retrieval recall. Phase 0 measured that on a set written before the corpus existed, and I have since read the corpus - so any recall number from this set would be contaminated and is deliberately not reported.",
+    "Whether real people would phrase things this way. These are my guesses at how strangers type, and the whole set shares one author, which is the standing limitation of a simulation and cannot be fixed from inside it."
+  ]
+}

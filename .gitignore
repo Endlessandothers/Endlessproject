@@ -7,3 +7,5 @@ Thumbs.db
 
 # Node
 node_modules/
+sim/.keys.json
+sim/run-log.json

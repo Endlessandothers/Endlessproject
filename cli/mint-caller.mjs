@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // mint-caller — create a caller and print its API key once.
 //
-//   node cli/mint-caller.mjs <caller_id> --owner <owner> [--credits 100] [--label "..."]
+//   node cli/mint-caller.mjs <caller_id> --owner <owner> [--credits 100]
+//                             [--label "..."] [--simulated]
 //
 // Runs from an operator's own AWS credentials, deliberately. No Lambda has
 // PutItem on the callers table, so no function — however badly it is
@@ -46,6 +47,15 @@ if (!owner) {
 const credits = Number(flag("credits", "100"));
 const label = flag("label", callerId);
 
+// Simulated callers exercise every real code path — that is the point of
+// testing a product rather than a mock — but their demand is invented. The flag
+// travels onto every gap and event row they produce (see auth.mjs
+// provenanceOf), and the nightly job keeps them off the public board.
+//
+// Set here, at minting, by whoever has the account. A caller cannot declare
+// itself real or simulated, because then the flag would be worth nothing.
+const simulated = args.includes("--simulated");
+
 let minted;
 try {
   minted = mintKey(callerId);
@@ -62,6 +72,7 @@ const item = {
   credits: { N: String(credits) },
   publications: { N: "0" },
   label: { S: label },
+  simulated: { BOOL: simulated },
   created_at: { S: new Date().toISOString() },
 };
 
@@ -86,7 +97,7 @@ try {
 }
 
 console.log(`
-  caller    ${minted.caller_id}
+  caller    ${minted.caller_id}${simulated ? "   [33m(simulated)[0m" : ""}
   owner     ${owner}
   credits   ${credits}
 

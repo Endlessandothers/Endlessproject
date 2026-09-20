@@ -64,13 +64,26 @@ resource "aws_cloudfront_distribution" "board" {
   }
 }
 
-# Only this distribution may read the bucket. Scoped to the distribution ARN, so
-# another account's CloudFront cannot point at it.
+# Only this distribution may read the bucket, and only these three objects.
+#
+# NAMED INDIVIDUALLY, not "/*". The bucket also holds sim-gaps.json, which
+# carries caller identities for analysis — and with a wildcard policy CloudFront
+# served it happily on the open internet at the first attempt, because "nothing
+# links to it" is not access control and a default cache behaviour serves
+# whatever it is asked for.
+#
+# So the public surface is an allowlist of objects rather than a bucket with
+# things in it that are hoped to stay unnoticed. Anything added to this bucket
+# is private until someone deliberately names it here.
 data "aws_iam_policy_document" "board_bucket" {
   statement {
-    sid       = "AllowCloudFrontRead"
-    actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.board.arn}/*"]
+    sid     = "AllowCloudFrontReadPublishedObjects"
+    actions = ["s3:GetObject"]
+    resources = [
+      "${aws_s3_bucket.board.arn}/index.html",
+      "${aws_s3_bucket.board.arn}/gaps.json",
+      "${aws_s3_bucket.board.arn}/tools.json",
+    ]
 
     principals {
       type        = "Service"

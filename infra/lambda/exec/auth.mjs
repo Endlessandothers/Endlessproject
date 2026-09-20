@@ -116,6 +116,19 @@ export function provenanceOf(caller, actor) {
     caller_created_at: caller.created_at ?? null,
     actor_verified: true,
     actor: actor ?? null,
+    // Quarantine flag for simulated traffic — see sim/README.md.
+    //
+    // Simulated callers exercise every real code path on purpose: that is the
+    // point of testing a product rather than a mock. But their demand is
+    // invented, and invented demand on the public board is precisely what the
+    // counting rules exist to prevent. So it is marked at the moment it is
+    // written, by the platform, from the caller row — never from the request —
+    // and the nightly job sorts the two apart.
+    //
+    // Marked on EVERY row rather than inferred later from a caller id prefix,
+    // because a caller can be deleted and a naming convention can be broken,
+    // and neither should be able to turn simulated demand into real evidence.
+    simulated: caller.simulated === true,
   };
 }
 

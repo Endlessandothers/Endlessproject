@@ -74,9 +74,9 @@ variable "table_wcu" {
 }
 
 variable "cluster_similarity" {
-  description = "Cosine similarity at or above which two gap queries are treated as the same need. Provisional: Titan V2 query-to-query similarity is a different distribution from the query-to-tool one that produced T, and it cannot be derived from a single gap row. Issue #13 must set it from the distribution the way T was, and cluster-report.mjs prints that distribution."
+  description = "Cosine similarity at or above which two gap queries are treated as the same need. DERIVED, not guessed: swept against the frozen blind set in sim/ on 2026-09-20. The within-need and across-need distributions OVERLAP, so no value separates them perfectly; 0.35 is the best F1 (0.909) and, more importantly, the lowest value with ZERO wrong merges. The error it does make is splitting a need into two, which under-reports demand — the safe direction. A higher value splits more (at the old 0.5, recall fell to 0.667). See docs/phase-1-simulation-findings.md."
   type        = number
-  default     = 0.5
+  default     = 0.35
 }
 
 variable "cluster_schedule" {

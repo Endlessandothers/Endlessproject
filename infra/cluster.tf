@@ -116,6 +116,10 @@ data "aws_iam_policy_document" "cluster" {
     resources = [
       "${aws_s3_bucket.board.arn}/gaps.json",
       "${aws_s3_bucket.board.arn}/tools.json",
+      # The simulation's own snapshot. Private — the bucket policy in board.tf
+      # allowlists the three objects CloudFront may serve, and this is not one
+      # of them. It was briefly public when that policy was a wildcard.
+      "${aws_s3_bucket.board.arn}/sim-gaps.json",
     ]
   }
 
