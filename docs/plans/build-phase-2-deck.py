@@ -12,8 +12,6 @@ Style is inherited from endless-phase-1.pptx and deliberately not reinvented:
     python docs/plans/build-phase-2-deck.py
 """
 
-import io
-import zipfile
 from pathlib import Path
 
 from pptx import Presentation
@@ -24,7 +22,17 @@ from pptx.util import Inches, Pt
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "endless-phase-2.pptx"
-PHASE1 = HERE / "endless-phase-1.pptx"
+ICONS = HERE / "icons"
+
+
+def icon(name):
+    """Official AWS service icons, from docs/plans/icons.
+
+    Read from the repo rather than lifted out of endless-phase-1.pptx at build
+    time, which is how this started: a generated artefact depending on another
+    generated artefact, unbuildable the moment that file moved.
+    """
+    return str(ICONS / f"{name}.png")
 
 INK = RGBColor(0x0F, 0x17, 0x2A)
 ORANGE = RGBColor(0xED, 0x71, 0x00)
@@ -122,6 +130,31 @@ def table(s, x, y, w, rows, widths, sizes=11, header=True):
     return t
 
 
+# The board's colour code, so the deck teaches the same legend the Miro frame uses.
+ZONE = {
+    "new":      (RGBColor(0xDC, 0xFC, 0xE7), RGBColor(0x14, 0x53, 0x2D), RGBColor(0x16, 0xA3, 0x4A)),
+    "existing": (RGBColor(0xFE, 0xF3, 0xC7), RGBColor(0x78, 0x35, 0x0F), RGBColor(0xF5, 0x9E, 0x0B)),
+    "sandbox":  (RGBColor(0xFE, 0xE2, 0xE2), RGBColor(0x7F, 0x1D, 0x1D), RGBColor(0xDC, 0x26, 0x26)),
+    "data":     (RGBColor(0xDB, 0xEA, 0xFE), RGBColor(0x1E, 0x3A, 0x8A), RGBColor(0x3B, 0x82, 0xF6)),
+    "public":   (RGBColor(0xED, 0xE9, 0xFE), RGBColor(0x4C, 0x1D, 0x95), RGBColor(0x8C, 0x4F, 0xFF)),
+}
+
+
+def legend_card(s, x, y, w, icon_name, title_, sub, kind):
+    """One card in the board's own visual language: icon badge, name, role."""
+    bg, tx, line = ZONE[kind]
+    card = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(0.82))
+    card.fill.solid()
+    card.fill.fore_color.rgb = bg
+    card.line.color.rgb = line
+    card.line.width = Pt(1)
+    card.shadow.inherit = False
+    card.adjustments[0] = 0.08
+    s.shapes.add_picture(icon(icon_name), Inches(x + 0.14), Inches(y + 0.18), Inches(0.46), Inches(0.46))
+    text(s, x + 0.76, y + 0.11, w - 0.9, 0.28, title_, 13, tx, bold=True)
+    text(s, x + 0.76, y + 0.40, w - 0.9, 0.3, sub, 10.5, tx)
+
+
 # ---------------------------------------------------------------- 1. title
 s = slide()
 s.background.fill.solid()
@@ -138,13 +171,10 @@ text(s, 1.1, 3.8, 10.4, 0.9,
      "How a ranking earns trust. Tool-to-tool dependencies, brightness kept separate from\n"
      "mass, decay with a floor, and the first things Endless sells.", 17, MUTED)
 
-# The AWS icons from the Phase 1 deck, reused so the two decks read as a set.
-if PHASE1.exists():
-    with zipfile.ZipFile(PHASE1) as z:
-        media = sorted(n for n in z.namelist() if n.startswith("ppt/media/image"))
-        for i, name in enumerate(media[:6]):
-            s.shapes.add_picture(io.BytesIO(z.read(name)),
-                                 Inches(1.1 + i * 0.72), Inches(5.1), Inches(0.55), Inches(0.55))
+# The same six services the Phase 0 and Phase 1 title slides carry, so the three
+# decks read as one set rather than three attempts.
+for i, name in enumerate(["lambda", "dynamodb", "bedrock", "s3", "cloudfront", "eventbridge"]):
+    s.shapes.add_picture(icon(name), Inches(1.1 + i * 0.72), Inches(5.1), Inches(0.55), Inches(0.55))
 
 text(s, 1.1, 6.4, 11.5, 0.3,
      "Done when you would let a stranger's agent trust the ranking unsupervised.", 11.5, DIM)
@@ -239,7 +269,50 @@ text(s, 0.85, 5.9, 11.5, 1.0,
      "weight and decay are all replayed from the append-only event log on every run — so a scoring rule can\n"
      "change and the whole of history is rescored under it.", 12.5, DIM, spacing=1.25)
 
-# ---------------------------------------------------------------- 6. moons
+# ---------------------------------------------------------------- 6. board layout
+s = slide()
+heading(s, "THE BOARD", "Where the Phase 2 frame sits")
+text(s, 0.85, 1.95, 11.4, 0.4, "miro.com/app/board/uXjVHpGFCos=", 15, ORANGE, bold=True)
+table(s, 0.85, 2.5, 11.5, [
+    ["Frame", "Size", "What it shows"],
+    ["Phase 0 Architecture", "2000 x 1350", "As built and measured. Registry, search, gap logging"],
+    ["Phase 1 Architecture", "2400 x 1480", "The phantom layer. Sandbox, identity, clustering, the board"],
+    ["Phase 2 Architecture", "2400 x 1520", "Dependencies, the four score components, decay and the floor"],
+], widths=[3.0, 1.8, 6.7])
+text(s, 0.85, 4.05, 11.5, 2.8,
+     "Three frames stacked top to bottom on one infinite canvas, one section-gap apart. There is no slide order\n"
+     "and no page one: zooming out shows the whole system and how it grew, which is the thing a static diagram\n"
+     "in a deck cannot do.\n\n"
+     "The frame is the unit that matters. Everything inside a frame has coordinates relative to that frame's\n"
+     "top-left corner, so dragging the frame moves the whole architecture together and nothing drifts out of\n"
+     "alignment. Phase 2's frame is the same width as Phase 1's on purpose — the two line up edge to edge, so\n"
+     "components that did not change sit directly above their Phase 2 selves.", 13, BODY, spacing=1.3)
+
+# ---------------------------------------------------------------- 7. board legend
+s = slide()
+heading(s, "THE BOARD", "Reading the Phase 2 frame")
+text(s, 0.85, 1.95, 6.5, 4.5,
+     "Icons are real AWS assets. Each service carries its official icon as a\n"
+     "badge on the card's top-left corner, from AWS Labs' own icon set rather\n"
+     "than an approximation.\n\n"
+     "Dashed rectangles are zones. They group components by what they are\n"
+     "allowed to do rather than by AWS category: callers, execution, sandbox,\n"
+     "data, and what the world can see.\n\n"
+     "Colour is a claim about change, not decoration. Green means new in this\n"
+     "phase, amber means it already existed and is untouched, red is the\n"
+     "sandbox, blue is stored state, purple is public.\n\n"
+     "Connectors are labelled with what actually crosses them, so an arrow\n"
+     "reads 'input, responses, tools' rather than pointing vaguely rightward.\n"
+     "A reader can follow one request end to end without the deck.", 13, BODY, spacing=1.3)
+
+legend_card(s, 7.75, 2.0, 4.6, "lambda", "exec-fn", "NEW — resolves declared dependencies", "new")
+legend_card(s, 7.75, 2.92, 4.6, "lambda", "registry-fn", "unchanged from Phase 1", "existing")
+legend_card(s, 7.75, 3.84, 4.6, "fargate", "tool-runtime", "the sandbox — Phase 2 does not touch it", "sandbox")
+legend_card(s, 7.75, 4.76, 4.6, "dynamodb", "events", "now carries via_tool, depth, root_call_id", "data")
+legend_card(s, 7.75, 5.68, 4.6, "cloudfront", "gaps board", "public — counts, never identities", "public")
+text(s, 7.75, 6.65, 4.6, 0.3, "The card convention used on the board", 11, DIM)
+
+# ---------------------------------------------------------------- 8. moons
 s = slide()
 heading(s, "FIRST DECISION — BUILT", "Moons: a tool never calls a tool")
 text(s, 0.85, 2.0, 6.0, 1.15,
@@ -268,7 +341,7 @@ text(s, 0.85, 6.3, 6.0, 0.9,
      "not read an earlier one's output, and the fetcher refused a tool\n"
      "that opens no connection.", 12.5, DIM, spacing=1.25)
 
-# ---------------------------------------------------------------- 7. scoring
+# ---------------------------------------------------------------- 9. scoring
 s = slide()
 heading(s, "SECOND DECISION", "Three numbers, kept apart")
 table(s, 0.85, 1.95, 11.5, [
@@ -289,7 +362,7 @@ text(s, 0.85, 5.1, 11.5, 1.9,
      "rather than having to trust it, which is the same reason the gaps board shows what it withheld and why.",
      13, BODY, spacing=1.3)
 
-# ---------------------------------------------------------------- 8. lifecycle
+# ---------------------------------------------------------------- 10. lifecycle
 s = slide()
 heading(s, "THIRD DECISION", "Decay, the floor, and the difference from takedown")
 table(s, 0.85, 1.95, 11.5, [
@@ -308,7 +381,7 @@ text(s, 0.85, 5.2, 11.5, 1.8,
      "Decay is the opposite kind of mechanism — slow, automatic, and driven by a curve nobody has data for yet.\n"
      "It is the parameter in this phase most likely to be wrong on the first attempt.", 13, BODY, spacing=1.3)
 
-# ---------------------------------------------------------------- 9. the hard part
+# ---------------------------------------------------------------- 11. the hard part
 s = slide()
 heading(s, "THE HARD PART", "Every number here is a fitted curve")
 text(s, 0.85, 2.0, 11.5, 1.2,
@@ -328,7 +401,7 @@ text(s, 0.85, 4.65, 11.5, 2.3,
      "Where the simulation cannot settle a number, the number says so. That is a finding, not a failure.",
      13, BODY, spacing=1.3)
 
-# ---------------------------------------------------------------- 10. money
+# ---------------------------------------------------------------- 12. money
 s = slide()
 heading(s, "THE INVARIANT UNDER TEST", "Money never reaches agent-facing ranking")
 table(s, 0.85, 1.95, 11.5, [
@@ -348,7 +421,7 @@ text(s, 0.85, 4.5, 11.5, 2.4,
      "assessed, because whoever benefits from a need looking urgent is the person who closes it.",
      13, BODY, spacing=1.3)
 
-# ---------------------------------------------------------------- 11. plan
+# ---------------------------------------------------------------- 13. plan
 s = slide()
 heading(s, "PLAN", "Eight issues")
 text(s, 0.85, 1.95, 11.4, 0.4, "Estimates for one developer. #1 is done.", 15, BODY)
@@ -368,7 +441,7 @@ callout(s, 0.85, 5.55, 11.5, 1.35,
         "thing in Endless actually worth gaming — and the incentive to game a ranking arrives with the money,\n"
         "not before it.", size=13.5)
 
-# ---------------------------------------------------------------- 12. sequencing
+# ---------------------------------------------------------------- 14. sequencing
 s = slide()
 heading(s, "SEQUENCING", "What blocks what")
 text(s, 0.85, 2.05, 11.5, 0.5,
@@ -387,7 +460,7 @@ text(s, 0.85, 2.85, 11.5, 4.0,
      "#8 is the exit, as in both previous phases. The gate clears, or a written finding says why it does not.",
      13, BODY, spacing=1.3)
 
-# ---------------------------------------------------------------- 13. cost
+# ---------------------------------------------------------------- 15. cost
 s = slide()
 heading(s, "COST", "What Phase 2 adds to the bill")
 table(s, 0.85, 1.95, 11.5, [
@@ -407,7 +480,7 @@ text(s, 0.85, 5.15, 11.5, 1.85,
      "The sandbox itself remains rounding error at 4ms p50, which is worth re-stating whenever Fargate is raised.",
      13, BODY, spacing=1.3)
 
-# ---------------------------------------------------------------- 14. risks
+# ---------------------------------------------------------------- 16. risks
 s = slide()
 heading(s, "RISKS", "What could go wrong")
 table(s, 0.85, 1.95, 11.5, [
@@ -428,7 +501,7 @@ text(s, 0.85, 5.75, 11.5, 1.2,
      "elsewhere: count distinct owners rather than occurrences, and discount the beneficiary. It has to be\n"
      "measured against the simulation rather than assumed to transfer.", 12.5, DIM, spacing=1.25)
 
-# ---------------------------------------------------------------- 15. the gate
+# ---------------------------------------------------------------- 17. the gate
 s = slide()
 heading(s, "THE GATE", "What would prove Phase 2")
 text(s, 0.85, 2.0, 11.5, 0.6,
@@ -448,7 +521,7 @@ callout(s, 0.85, 4.95, 11.5, 1.0,
 text(s, 0.85, 6.2, 11.5, 0.8,
      "The gate clears, or a written finding says why it does not — as in both previous phases.", 12.5, DIM)
 
-# ---------------------------------------------------------------- 16. start here
+# ---------------------------------------------------------------- 18. start here
 s = slide()
 heading(s, "START HERE", "The first four moves")
 rows = [
