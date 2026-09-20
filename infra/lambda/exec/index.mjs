@@ -2,14 +2,20 @@
 //
 // It owns the sequence and nothing else:
 //
-//   1. resolve the tool version from the registry
-//   2. hand its declared requests to the fetcher, which is the only thing online
-//   3. hand the responses to the runtime, which has no way to be online
-//   4. append a call event, whatever the outcome
+//   1. resolve the tool version, and refuse it unless review approved it
+//   2. run its declared tool dependencies first, recursively
+//   3. hand its declared requests to the fetcher, the only thing online
+//   4. hand both to the runtime, which has no way to be online
+//   5. append a call event, whatever the outcome
 //
 // The handler source lives on the tool row, so the code that runs and the
 // version that was registered are the same immutable object. There is no path
 // by which a tool executes code that differs from what review approved.
+//
+// Step 2 is Phase 2, issue #1 — moons. A tool never calls another tool itself;
+// it declares the dependency and the platform resolves it, exactly as it does
+// for HTTP. See deps.mjs for why that is the only arrangement the sandbox
+// permits, and for what bounds it.
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
@@ -17,6 +23,7 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { randomUUID } from "node:crypto";
 import { authenticate, provenanceOf, isSelfCall } from "./auth.mjs";
 import { mayExecute, refusalReason } from "./gate.mjs";
+import { resolveInputs, checkChain } from "./deps.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
@@ -113,6 +120,139 @@ async function recordEvent(fields) {
   }));
 }
 
+// One tool's execution, from resolving it to recording what happened.
+//
+// Recursive IN PROCESS rather than by invoking this function again. Lambda
+// invoking itself is both something AWS actively detects and stops, and a way
+// to turn one request into an unbounded fan-out of billable functions. Here the
+// fan-out is bounded by MAX_DEPTH and MAX_USES and stays inside a single
+// invocation, where its whole cost is visible in one place.
+//
+// chain is every tool already running above this one, which is what makes cycle
+// detection possible; depth falls out of its length.
+async function runTool({ toolId, version, input, provenance, chain, viaTool, rootCallId }) {
+  const started = Date.now();
+
+  const record = (fields) => recordEvent({
+    tool_id: toolId, ...provenance,
+    // The dependency edge, recorded on the event itself. This is what makes the
+    // graph real: without it there is nothing to weigh, and dependency weight
+    // would be a claim rather than a measurement.
+    via_tool: viaTool ?? null,
+    depth: chain.length,
+    root_call_id: rootCallId,
+    ms: Date.now() - started,
+    ...fields,
+  });
+
+  const fail = async (status, error, extra = {}) => {
+    await record({ version, outcome: "error", error: String(error).slice(0, 300), ...extra });
+    return { ok: false, status, error };
+  };
+
+  const guard = checkChain(chain, toolId);
+  if (!guard.ok) return await fail(409, guard.reason, { stage: "dependency" });
+
+  const tool = await resolveTool(toolId, version);
+  if (!tool) return await fail(404, `no such tool: ${toolId}${version ? `@${version}` : ""}`);
+  if (!tool.handler_source) {
+    return await fail(409, `${toolId}@${tool.version} is registered but carries no executable package`);
+  }
+
+  // Checked BEFORE the input schema, the fetch and the transform, so an
+  // unapproved tool costs one GetItem rather than a round trip to somebody
+  // else's API and a sandbox invocation.
+  //
+  // Applied at EVERY depth. A tool being approved says nothing about what it
+  // depends on, and an approved tool pulling in an unapproved one would be a
+  // way to run unreviewed code under a reviewed tool's permission.
+  const approval = await approvalFor(toolId, tool.version);
+  if (!mayExecute(approval)) {
+    return await fail(403, `${toolId}@${tool.version} is not approved for execution (${refusalReason(approval)})`, {
+      version: tool.version, stage: "review",
+    });
+  }
+
+  const schemaErrors = validateInput(tool.input_schema, input);
+  if (schemaErrors.length) return await fail(400, schemaErrors.join("; "), { version: tool.version });
+
+  // Dependencies first, so the transform receives finished values.
+  //
+  // Sequential rather than parallel. The account's entire concurrency ceiling is
+  // 10, and a parallel fan-out at depth would contend with itself for the very
+  // fetcher and runtime it needs in order to finish. Slower and predictable
+  // beats faster and occasionally deadlocked.
+  const tools = {};
+  for (const dep of tool.uses ?? []) {
+    // Resolved against the calling tool's input AND the dependencies that have
+    // already run, so one can feed the next. Declaration order is the execution
+    // order, and publication already checked that no entry reads from a later
+    // one — so there is never a valid order to search for here.
+    const { input: depInput, missing } = resolveInputs(dep.input, input, tools);
+    if (missing.length) {
+      return await fail(400, `dependency ${dep.id}: ${missing.join("; ")}`, {
+        version: tool.version, stage: "dependency",
+      });
+    }
+    const sub = await runTool({
+      toolId: dep.tool_id,
+      version: dep.version ?? null,
+      input: depInput,
+      provenance,
+      chain: [...chain, toolId],
+      viaTool: toolId,
+      rootCallId,
+    });
+    if (!sub.ok) {
+      // Reported against the tool the caller actually asked for, naming the
+      // dependency. A caller who never declared it cannot act on its id alone.
+      return await fail(sub.status, `dependency ${dep.id} (${dep.tool_id}) failed: ${sub.error}`, {
+        version: tool.version, stage: "dependency",
+      });
+    }
+    tools[dep.id] = sub.result;
+  }
+
+  // A tool that declares no requests never reaches the fetcher.
+  //
+  // Not only an optimisation, though it does save an invocation on every call
+  // to a pure composition. A tool composing other tools has no allowlist,
+  // because it opens no connection — and asking the fetcher to prove an empty
+  // allowlist is safe is asking the wrong question of the wrong component.
+  let responses = {};
+  if ((tool.requests ?? []).length) {
+    const fetched = await invoke(FETCHER_FN, {
+      tool_id: toolId, requests: tool.requests, input, allowlist: tool.allowlist ?? [],
+    });
+    if (!fetched.ok) {
+      return await fail(502, `upstream fetch failed: ${fetched.error}`, { version: tool.version, stage: "fetch" });
+    }
+    responses = fetched.responses;
+  }
+
+  const ran = await invoke(RUNTIME_FN, {
+    tool_id: toolId, version: tool.version, source: tool.handler_source,
+    input, responses, tools,
+  });
+  if (!ran.ok) {
+    return await fail(422, `tool failed: ${ran.error}`, { version: tool.version, stage: "transform" });
+  }
+
+  await record({
+    version: tool.version, outcome: "success",
+    transform_ms: ran.ms ?? null,
+    // Which review let this run. Ownership and approvals both change, and an
+    // event has to stay true to the moment it was written.
+    approved_by: approval.reviewer ?? null,
+    // A call by the tool's own owner is not demand, flagged at write time
+    // because ownership on either side can change afterwards.
+    self_call: isSelfCall({ owner: provenance.owner }, tool),
+    dependencies: (tool.uses ?? []).map((u) => u.tool_id),
+  });
+
+  return { ok: true, result: ran.result, version: tool.version, ms: Date.now() - started };
+}
+
 export const handler = async (event) => {
   const started = Date.now();
   const raw = event?.isBase64Encoded
@@ -144,70 +284,30 @@ export const handler = async (event) => {
   // Calling a tool is free. Publishing one is not. See registry/index.mjs.
   const provenance = provenanceOf(auth.caller, actor);
 
-  const fail = async (status, error, extra = {}) => {
-    await recordEvent({
-      tool_id, version, outcome: "error", error: String(error).slice(0, 300),
-      ms: Date.now() - started, ...provenance, ...extra,
-    });
-    return json(status, { error });
-  };
+  // One id shared by every event in this call, dependencies included. It is what
+  // turns a scatter of rows into one tree that can be read back.
+  const rootCallId = randomUUID();
 
   try {
-    const tool = await resolveTool(tool_id, version);
-    if (!tool) return await fail(404, `no such tool: ${tool_id}${version ? `@${version}` : ""}`);
-    if (!tool.handler_source) {
-      return await fail(409, `${tool_id}@${tool.version} is registered but carries no executable package`);
-    }
-
-    // Checked BEFORE the input schema, the fetch and the transform, so an
-    // unapproved tool costs one GetItem rather than a round trip to somebody
-    // else's API and a sandbox invocation.
-    const approval = await approvalFor(tool_id, tool.version);
-    if (!mayExecute(approval)) {
-      const state = refusalReason(approval);
-      return await fail(403, `${tool_id}@${tool.version} is not approved for execution (${state})`, {
-        version: tool.version, stage: "review",
-      });
-    }
-
-    const schemaErrors = validateInput(tool.input_schema, input);
-    if (schemaErrors.length) return await fail(400, schemaErrors.join("; "), { version: tool.version });
-
-    // Step 2 — the only component permitted to open a connection.
-    const fetched = await invoke(FETCHER_FN, {
-      tool_id, requests: tool.requests ?? [], input, allowlist: tool.allowlist ?? [],
+    const out = await runTool({
+      toolId: tool_id, version, input, provenance,
+      chain: [], viaTool: null, rootCallId,
     });
-    if (!fetched.ok) {
-      return await fail(502, `upstream fetch failed: ${fetched.error}`, { version: tool.version, stage: "fetch" });
-    }
-
-    // Step 3 — no route, no credentials, no disk.
-    const ran = await invoke(RUNTIME_FN, {
-      tool_id, version: tool.version, source: tool.handler_source,
-      input, responses: fetched.responses,
-    });
-    if (!ran.ok) {
-      return await fail(422, `tool failed: ${ran.error}`, { version: tool.version, stage: "transform" });
-    }
-
-    const ms = Date.now() - started;
-    await recordEvent({
-      tool_id, version: tool.version, outcome: "success", ms,
-      transform_ms: ran.ms ?? null, ...provenance,
-      // Which review let this run. Ownership and approvals both change, and an
-      // event has to stay true to the moment it was written.
-      approved_by: approval.reviewer ?? null,
-      // Flagged at write time, not inferred later: ownership on either side can
-      // change, and the log has to stay true to the moment. A call by the tool's
-      // own owner is not demand and must never count toward mass.
-      self_call: isSelfCall(auth.caller, tool),
-    });
+    if (!out.ok) return json(out.status, { error: out.error });
 
     return json(200, {
-      tool: `${tool_id}@${tool.version}`, result: ran.result, ms,
+      tool: `${tool_id}@${out.version}`,
+      result: out.result,
+      ms: Date.now() - started,
+      call_id: rootCallId,
     });
   } catch (err) {
     console.error(err);
-    return await fail(500, String(err?.message ?? err));
+    await recordEvent({
+      tool_id, version, outcome: "error", ...provenance,
+      root_call_id: rootCallId, depth: 0,
+      error: String(err?.message ?? err).slice(0, 300), ms: Date.now() - started,
+    });
+    return json(500, { error: String(err?.message ?? err) });
   }
 };

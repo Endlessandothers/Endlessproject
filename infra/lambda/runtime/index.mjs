@@ -13,7 +13,7 @@
 // attacker reach after escaping", and the answer is: an empty network, no
 // credentials, a read-only filesystem.
 //
-// Input:  { tool_id, version, source, input, responses }
+// Input:  { tool_id, version, source, input, responses, tools }
 // Output: { ok, result } or { ok:false, error }
 
 const MAX_SOURCE_BYTES = 256 * 1024;
@@ -60,7 +60,7 @@ async function withTimeout(promise, ms) {
 }
 
 export const handler = async (event) => {
-  const { tool_id, version, source, input, responses } = event ?? {};
+  const { tool_id, version, source, input, responses, tools } = event ?? {};
 
   if (typeof source !== "string" || !source.length) {
     return { ok: false, error: "no handler source supplied" };
@@ -92,6 +92,11 @@ export const handler = async (event) => {
       Promise.resolve(mod.transform({
         input: Object.freeze({ ...(input ?? {}) }),
         responses: Object.freeze({ ...(responses ?? {}) }),
+        // Results from this tool's declared dependencies, already executed by
+        // the platform. The handler sees finished values and never learns that
+        // another tool exists — it cannot choose one at call time, and cannot
+        // send one anything that was not written down at publication.
+        tools: Object.freeze({ ...(tools ?? {}) }),
       })),
       TIMEOUT_MS,
     );

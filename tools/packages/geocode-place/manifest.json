@@ -1,0 +1,23 @@
+{
+  "tool_id": "geocode-place",
+  "name": "Place to Coordinates",
+  "description": "Turns a place name into latitude and longitude, with the country and region it resolved to so a caller can tell Springfield from Springfield.",
+  "category": "geography",
+  "runtime": "lambda-vpc",
+  "runtime_reason": "Reads one small JSON response and picks the best match. No native dependencies, no sustained CPU.",
+  "source_api": "open-meteo.com",
+  "terms": "https://open-meteo.com/en/terms",
+  "creator": "erics",
+  "input": {
+    "place": { "type": "string", "required": true, "description": "a town, city or region name" }
+  },
+  "allowlist": ["geocoding-api.open-meteo.com"],
+  "requests": [
+    {
+      "id": "geo",
+      "method": "GET",
+      "url": "https://geocoding-api.open-meteo.com/v1/search?name={place}&count=1&language=en&format=json"
+    }
+  ],
+  "sample": { "place": "Lisbon" }
+}

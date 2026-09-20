@@ -1,0 +1,20 @@
+{
+  "tool_id": "air-by-place",
+  "name": "Air Quality by Place Name",
+  "description": "Current outdoor air quality for a named town or city, with what the readings mean for going outside. Takes a place name rather than coordinates.",
+  "category": "health",
+  "runtime": "lambda-vpc",
+  "runtime_reason": "Composes two other tools and reshapes their output. No fetching of its own, no native dependencies.",
+  "creator": "erics",
+  "note": "The first moon: it makes no HTTP request itself. Both of its inputs come from other registered tools, resolved by the platform before its transform runs.",
+  "input": {
+    "place": { "type": "string", "required": true, "description": "a town, city or region name" }
+  },
+  "allowlist": [],
+  "requests": [],
+  "uses": [
+    { "id": "where", "tool_id": "geocode-place", "input": { "place": "{place}" } },
+    { "id": "air", "tool_id": "air-quality", "input": { "lat": "{where.lat}", "lon": "{where.lon}" } }
+  ],
+  "sample": { "place": "Lisbon" }
+}

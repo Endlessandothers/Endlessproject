@@ -61,10 +61,15 @@ async function one(req) {
 export const handler = async (event) => {
   const { tool_id, requests = [], input = {}, allowlist = [] } = event ?? {};
 
+  // Nothing to fetch is answered before anything else. A tool that composes
+  // other tools declares no requests and therefore no allowlist, and demanding
+  // one from something that opens no connection refuses a legitimate call for
+  // failing to justify an action it never takes.
+  if (requests.length === 0) return { ok: true, responses: {} };
+
   if (!Array.isArray(allowlist) || allowlist.length === 0) {
     return { ok: false, error: "no allowlist supplied; refusing to fetch anything" };
   }
-  if (requests.length === 0) return { ok: true, responses: {} };
   if (requests.length > MAX_REQUESTS) {
     return { ok: false, error: `${requests.length} requests exceeds the limit of ${MAX_REQUESTS}` };
   }

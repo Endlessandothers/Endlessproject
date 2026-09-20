@@ -18,6 +18,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import { packVector } from "./vector.mjs";
 import { authenticate, authorise } from "./auth.mjs";
+import { validateUses } from "./deps.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({});
@@ -153,6 +154,12 @@ async function register(body, caller) {
     if (pkg.handler_source.length > 256 * 1024) {
       return json(400, { error: "package.handler_source exceeds 256 KB" });
     }
+    // Every tool this one depends on, fixed at registration for the same reason
+    // as the host allowlist: a dependency that could be chosen at call time
+    // would not be part of what review looked at.
+    const useErrors = validateUses(pkg.uses, body.tool_id);
+    if (useErrors.length) return json(400, { error: useErrors.join("; ") });
+
     // Every host a tool may reach, fixed at registration. The fetcher re-checks
     // at call time, but recording it here is what makes review meaningful.
     for (const req of pkg.requests ?? []) {
@@ -187,6 +194,7 @@ async function register(body, caller) {
       handler_source: pkg.handler_source,
       requests: pkg.requests ?? [],
       allowlist: pkg.allowlist ?? [],
+      uses: pkg.uses ?? [],
       input_schema: pkg.input ?? {},
       runtime: pkg.runtime ?? "lambda-vpc",
       executable: true,
