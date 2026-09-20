@@ -175,7 +175,7 @@ test("provenance survives a caller row with nothing optional on it", () => {
   const p = provenanceOf({ caller_id: "bare" }, null);
   assert.deepEqual(p, {
     caller_id: "bare", owner: null, caller_created_at: null,
-    actor_verified: true, actor: null, simulated: false,
+    actor_verified: true, actor: null, simulated: false, role: "caller",
   });
 });
 
@@ -193,4 +193,12 @@ test("the simulated flag comes from the caller, never from the request", () => {
 
   // Only exactly true counts. A truthy string does not quarantine anything.
   assert.equal(provenanceOf({ caller_id: "x", simulated: "yes" }, null).simulated, false);
+});
+
+// role decides whether a request counts as demand, so like every other identity
+// fact it comes from the caller row and never from what the caller says.
+test("the caller's role travels on every row and cannot be self-declared", () => {
+  assert.equal(provenanceOf({ caller_id: "b", role: "builder" }, null).role, "builder");
+  assert.equal(provenanceOf({ caller_id: "p" }, null).role, "caller");
+  assert.equal(provenanceOf({ caller_id: "p" }, { role: "builder", agent_id: "a", session_id: "s" }).role, "caller");
 });

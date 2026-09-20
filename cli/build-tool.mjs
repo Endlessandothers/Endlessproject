@@ -83,8 +83,11 @@ function askRegistry(query) {
     headers: { authorization: `Bearer ${KEY}` },
     body: JSON.stringify({ query, k: 5, actor: { agent_id: "builder", session_id: "duplicate-check" } }),
   });
-  // gap_logged true means the adjudicator said nothing fits.
-  return { query, tool_id: body.gap_logged ? null : (body.results?.[0]?.tool_id ?? null) };
+  // The adjudicator's verdict, read directly. It used to be inferred from
+  // whether a gap got logged, which stopped being true the moment a builder's
+  // searches stopped logging gaps — and the check then reported that
+  // recent-earthquakes answers "what type is pikachu".
+  return { query, tool_id: body.fits ?? null };
 }
 
 function bedrock(prompt) {

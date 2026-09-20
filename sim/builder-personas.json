@@ -1,0 +1,80 @@
+{
+  "version": "1.0",
+  "written": "2026-09-20",
+  "purpose": "A second frozen set, for the builder rather than for clustering.",
+  "note": "personas.json deliberately contains needs nothing can close — PDF parsing, OCR, uptime monitoring — because it was written to measure whether clustering finds needs, not whether anything can meet them. That makes it useless for testing the builder: every need in it fails for the same reason, and none of them exercise the path where generation succeeds. This set is the opposite. Every need here IS closable by a real, free, keyless HTTPS API that is not in the registry, so a failure to close one is a failure of the builder rather than of the world. Same rules as the other set: frozen by checksum before any run, labels written first, and every caller minted --simulated so none of it reaches the public board.",
+  "personas": [
+    {
+      "caller_id": "bsim-ada",
+      "owner": "bsim-owner-ada",
+      "role": "game wiki maintainer",
+      "requests": [
+        { "day": 12, "text": "what type is pikachu" },
+        { "day": 7, "text": "current time in tokyo" }
+      ]
+    },
+    {
+      "caller_id": "bsim-bo",
+      "owner": "bsim-owner-bo",
+      "role": "hobby bot builder",
+      "requests": [
+        { "day": 10, "text": "look up a pokemon by name and get its stats" },
+        { "day": 5, "text": "facts about a country by name" }
+      ]
+    },
+    {
+      "caller_id": "bsim-cleo",
+      "owner": "bsim-owner-cleo",
+      "role": "quiz app developer",
+      "requests": [
+        { "day": 8, "text": "pokemon base stats and type from its name" },
+        { "day": 3, "text": "population and capital of a country" }
+      ]
+    },
+    {
+      "caller_id": "bsim-dev",
+      "owner": "bsim-owner-dev",
+      "role": "kids education app",
+      "requests": [
+        { "day": 9, "text": "get details about a pokemon" },
+        { "day": 4, "text": "pictures of a dog breed" }
+      ]
+    },
+    {
+      "caller_id": "bsim-eli",
+      "owner": "bsim-owner-eli",
+      "role": "travel content writer",
+      "requests": [
+        { "day": 11, "text": "what currency and capital does a country use" },
+        { "day": 6, "text": "what will the weather be tomorrow in lisbon" }
+      ]
+    },
+    {
+      "caller_id": "bsim-fay",
+      "owner": "bsim-owner-fay",
+      "role": "geography teacher",
+      "requests": [
+        { "day": 7, "text": "country information including region and languages" },
+        { "day": 2, "text": "how tall is the ground at these coordinates" }
+      ]
+    },
+    {
+      "caller_id": "bsim-gus",
+      "owner": "bsim-owner-gus",
+      "role": "pet adoption site",
+      "requests": [
+        { "day": 9, "text": "show me photos of a specific dog breed" },
+        { "day": 3, "text": "random dog breed images" }
+      ]
+    },
+    {
+      "caller_id": "bsim-hana",
+      "owner": "bsim-owner-hana",
+      "role": "veterinary clinic site",
+      "requests": [
+        { "day": 5, "text": "get images for a dog breed by name" },
+        { "day": 1, "text": "generate a qr code for a url" }
+      ]
+    }
+  ]
+}

@@ -106,6 +106,10 @@ export function competitionClusters(searchEvents, {
     // it cannot contribute to a gap count: there is nobody behind it.
     const caller = e.caller_id;
     if (!caller || e.actor_verified !== true || e.simulated === true) continue;
+    // A builder probing the registry is not a user choosing between tools, so
+    // its searches build no competition edges either. Same reason its searches
+    // log no gaps.
+    if (e.role === "builder") continue;
 
     const ranked = (e.ranked ?? []).slice(0, topN);
     for (let i = 0; i < ranked.length; i++) {

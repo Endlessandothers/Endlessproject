@@ -196,3 +196,25 @@ test("decay never runs on negative age", () => {
   const future = decayedMass([NOW + 10 * DAY], 90, NOW);
   assert.ok(future <= 1.0001, `a future call must not count more than one, got ${future}`);
 });
+
+// THE FEEDBACK LOOP, found by asking why the gap count had tripled: 33 of 36
+// gaps were the builder's own duplicate checks. Every time it asked whether a
+// need was already met, the asking was recorded as somebody needing it — so
+// investigating a need made that need look more worth building. A justification
+// manufacturing itself, which is the exact shape this project exists to stop.
+test("a builder probing the registry builds no competition edges", () => {
+  const events = Array.from({ length: 20 }, (_, i) =>
+    ({ ranked: ["a", "b"], caller_id: `c${i}`, actor_verified: true, role: "builder" }));
+  assert.deepEqual(competitionClusters(events), [],
+    "the builder is not a user choosing between tools");
+});
+
+test("ordinary callers still build edges alongside builder traffic", () => {
+  const events = [
+    ...Array.from({ length: 10 }, (_, i) =>
+      ({ ranked: ["a", "b"], caller_id: `bot${i}`, actor_verified: true, role: "builder" })),
+    ...Array.from({ length: MIN_CO_RETRIEVAL_CALLERS }, (_, i) =>
+      ({ ranked: ["a", "b"], caller_id: `person${i}`, actor_verified: true, role: "caller" })),
+  ];
+  assert.deepEqual(competitionClusters(events), [["a", "b"]]);
+});

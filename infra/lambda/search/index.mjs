@@ -236,8 +236,25 @@ export const handler = async (event) => {
     const rejected = body.rejected === true;
     const isGap = verdict.used ? verdict.tool_id === null : top < THRESHOLD_T;
 
+    // THE BUILDER'S SEARCHES ARE NOT DEMAND.
+    //
+    // Found by looking at why the gap count had gone from 3 to 36: 33 of them
+    // were the builder asking "does anything already do this?" — six times for
+    // one need, because the builder was run six times against it.
+    //
+    // That is not noise, it is a feedback loop. Every check the builder makes
+    // inflates the demand for the thing it is checking, which makes that need
+    // look more worth building, which is a justification manufacturing itself.
+    // The one shape this entire project exists to prevent, arriving from the
+    // inside.
+    //
+    // The search still runs and is still recorded as an event — the builder
+    // needs the answer and the cost should be visible. It simply never becomes
+    // a gap.
+    const isBuilder = provenance.role === "builder";
+
     let gap_id = null;
-    if (isGap || rejected) {
+    if ((isGap || rejected) && !isBuilder) {
       gap_id = randomUUID();
       await ddb.send(new PutCommand({
         TableName: GAPS,
@@ -264,7 +281,20 @@ export const handler = async (event) => {
       query, results, threshold_t: THRESHOLD_T, fusion_alpha: FUSION_ALPHA,
       decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
       judge_error: verdict.error ?? null,
+      // THE ANSWER, said plainly rather than left to be inferred.
+      //
+      // The builder's duplicate check used to read gap_logged and treat "a gap
+      // was recorded" as "nothing fits". The moment builder searches stopped
+      // logging gaps, that inference collapsed and the check began reporting
+      // that recent-earthquakes answers "what type is pikachu".
+      //
+      // gap_logged is a SIDE EFFECT of the verdict, filtered by who asked.
+      // This is the verdict. Anything deciding whether a tool exists should
+      // read this, and a side effect should never have been load-bearing.
+      fits: verdict.used ? verdict.tool_id : (top >= THRESHOLD_T ? results[0]?.tool_id ?? null : null),
       gap_logged: gap_id !== null, gap_id,
+      // Said plainly rather than left for the caller to infer from a null id.
+      ...(isBuilder && isGap ? { note: "nothing fits, and a builder's search is not recorded as demand" } : {}),
     });
   } catch (err) {
     console.error(err);

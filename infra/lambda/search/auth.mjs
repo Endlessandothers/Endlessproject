@@ -116,6 +116,10 @@ export function provenanceOf(caller, actor) {
     caller_created_at: caller.created_at ?? null,
     actor_verified: true,
     actor: actor ?? null,
+    // What kind of caller this is. "builder" is the platform's own tool-writing
+    // agent; everything else is somebody with a need. Carried on every row
+    // because the difference decides whether a request is evidence of demand.
+    role: caller.role ?? "caller",
     // Quarantine flag for simulated traffic — see sim/README.md.
     //
     // Simulated callers exercise every real code path on purpose: that is the

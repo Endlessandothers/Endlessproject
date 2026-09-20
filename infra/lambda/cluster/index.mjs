@@ -82,6 +82,7 @@ async function computeMass() {
     type: i.type, tool_id: i.tool_id, outcome: i.outcome, ms: i.ms, ts: i.ts,
     // The shortlist a search returned, which is how competition is read.
     ranked: i.ranked ?? null,
+    role: i.role ?? "caller",
     caller_id: i.caller_id ?? null, owner: i.owner ?? null,
     actor_verified: i.actor_verified === true, self_call: i.self_call === true,
     // The dependency edge. Phase 2 reads the graph off the log rather than off
