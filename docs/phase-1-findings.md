@@ -161,6 +161,7 @@ something, it has to come from one canonical place.
 | 8 | Gap clustering | Nightly. Groups by meaning, counts distinct verified callers. |
 | 9 | Repeated-gap rule | Gate plus corroboration, every component reported. |
 | 10 | Mass-only scoring | Recomputed from the log, never accumulated. |
+| 11 | Review gate | **Closed 2026-09-20.** Third-party submission waived; the safety half was not. |
 | 12 | Public gaps board | Static, behind CloudFront, states its own counting rule. |
 
 ### The demonstration that matters
@@ -221,14 +222,42 @@ change either way.
 
 ---
 
+## Closed on 2026-09-20
+
+Two things were complete as features and absent as controls. Both are now shut.
+
+**Unreviewed code executed.** Publishing set a tool runnable immediately;
+`air-quality` had been executing since it was seeded without anyone approving
+it. Execution now requires an explicit approval in its own table, and **absence
+of an approval is a refusal** — a missing record, a failed write, a new tool and
+a rejection all fail the same safe way.
+
+The table is separate for a reason worth keeping: `registry-fn` must hold
+`PutItem` on the tools table, so an approval stored there would let the function
+that *accepts* submissions *approve* them. No Lambda has any write on approvals;
+it is an operator action, like minting a key.
+
+`--revoke` is the takedown path and was drilled rather than assumed: approve →
+call succeeds → revoke → the very next call is refused.
+
+**The MCP endpoint answered strangers for free.** `initialize`, `ping` and
+`tools/list` needed no key, so anyone with the URL could make the account work.
+Every method now requires one, shape-checked before anything downstream runs.
+Behind it, a CloudWatch alarm trips a function that throttles the endpoint to
+zero concurrency and emails; throttled invocations are not billed.
+
+A kill switch rather than a rate limiter, deliberately: a rate limiter needs
+per-caller state on the hot path, which is what a flood makes expensive, so the
+defence would scale its cost with the attack. This costs nothing until it fires.
+It trades availability for everyone until a human restores it — the right trade
+for a free tier with one operator, the wrong one as soon as there is a customer.
+
 ## Carried into Phase 2
 
-- **DDoS.** Authentication now runs before the embedding, so an unauthenticated
-  flood costs one GetItem rather than two model calls. That was the cheapest
-  item. The MCP Function URL is `authorization_type = NONE` by necessity, and
-  `initialize`, `ping` and `tools/list` answer without a key — so there is a
-  public surface that can be made to run. CloudFront and WAF in front of it is
-  the next item, not a refinement.
+- **DDoS.** Largely handled above. What remains is that the kill switch is a
+  blunt instrument: it protects the bill by taking the service down. Replacing
+  it with a real per-caller rate limiter is Phase 2 work, and should happen
+  before the threshold is ever raised to avoid an outage.
 - **Ranking is not wired to mass.** Search still ranks purely on retrieval.
   Feeding mass into ranking changes what the Phase 0 eval measured, so it needs
   a re-run of the harness rather than a code change.
