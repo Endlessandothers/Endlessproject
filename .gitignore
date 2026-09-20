@@ -9,3 +9,4 @@ Thumbs.db
 node_modules/
 sim/.keys.json
 sim/run-log.json
+tools/generated/

@@ -2,7 +2,7 @@
 // mint-caller — create a caller and print its API key once.
 //
 //   node cli/mint-caller.mjs <caller_id> --owner <owner> [--credits 100]
-//                             [--label "..."] [--simulated]
+//                             [--label "..."] [--simulated] [--builder]
 //
 // Runs from an operator's own AWS credentials, deliberately. No Lambda has
 // PutItem on the callers table, so no function — however badly it is
@@ -56,6 +56,12 @@ const label = flag("label", callerId);
 // itself real or simulated, because then the flag would be worth nothing.
 const simulated = args.includes("--simulated");
 
+// A builder caller publishes tools nobody wrote. Everything it registers is
+// marked provisional by the platform, and held to the tighter generated
+// envelope. Set here, at minting, because a caller declaring its own role would
+// let a person publish as a builder or a builder publish as a person.
+const role = args.includes("--builder") ? "builder" : "caller";
+
 let minted;
 try {
   minted = mintKey(callerId);
@@ -73,6 +79,7 @@ const item = {
   publications: { N: "0" },
   label: { S: label },
   simulated: { BOOL: simulated },
+  role: { S: role },
   created_at: { S: new Date().toISOString() },
 };
 
@@ -97,7 +104,7 @@ try {
 }
 
 console.log(`
-  caller    ${minted.caller_id}${simulated ? "   [33m(simulated)[0m" : ""}
+  caller    ${minted.caller_id}${simulated ? "   [33m(simulated)[0m" : ""}${role === "builder" ? "   [36m(builder — publishes provisional)[0m" : ""}
   owner     ${owner}
   credits   ${credits}
 

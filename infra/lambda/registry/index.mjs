@@ -19,6 +19,7 @@ import {
 import { packVector } from "./vector.mjs";
 import { authenticate, authorise } from "./auth.mjs";
 import { validateUses } from "./deps.mjs";
+import { validateGenerated } from "./builder.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({});
@@ -160,6 +161,15 @@ async function register(body, caller) {
     const useErrors = validateUses(pkg.uses, body.tool_id);
     if (useErrors.length) return json(400, { error: useErrors.join("; ") });
 
+    // Generated packages are held to a tighter envelope than a person's — not
+    // because generated code is more dangerous inside the sandbox, but because
+    // a reviewer reading something no human wrote has less context to judge it
+    // with. See registry/builder.mjs.
+    if (caller.role === "builder") {
+      const genErrors = validateGenerated(pkg);
+      if (genErrors.length) return json(400, { error: genErrors.join("; ") });
+    }
+
     // Every host a tool may reach, fixed at registration. The fetcher re-checks
     // at call time, but recording it here is what makes review meaningful.
     for (const req of pkg.requests ?? []) {
@@ -180,6 +190,12 @@ async function register(body, caller) {
     mcp_url: body.mcp_url ?? null,
     category: body.category ?? "uncategorised",
     owner,
+    // Auto-generated, and marked so by the platform rather than by the
+    // publisher. PROJECT.md requires a generated tool to be "visibly
+    // auto-generated"; taking that from a request field would let a builder
+    // publish as though a person had written it, and let a person claim the
+    // opposite. It comes from the caller's role, which only an operator sets.
+    provisional: caller.role === "builder",
     // Ownership was taken from the authenticated caller, so it can be trusted.
     // Rows written before identity was enforced carry no such flag, and
     // anything that reasons about ownership must treat those as unverified —
