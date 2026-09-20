@@ -85,6 +85,24 @@ variable "cluster_schedule" {
   default     = "cron(15 3 * * ? *)"
 }
 
+variable "mcp_flood_threshold" {
+  description = "Invocations of the public MCP endpoint in five minutes that trip the kill switch. Far above anything real traffic does today: the whole blind-set replay was 35 requests, and the account's concurrency ceiling of 10 caps a flood near 500/sec, so this fires within a minute of one starting. Revisit when there is real traffic to revisit it against."
+  type        = number
+  default     = 2000
+}
+
+variable "approvals_rcu" {
+  description = "Read capacity for the approvals table. Read once per tool call. Paid for by dropping the two by_day indexes to 2/2; neither is on a hot path."
+  type        = number
+  default     = 2
+}
+
+variable "approvals_wcu" {
+  description = "Write capacity for the approvals table. Written only when a human approves, rejects or revokes a version, which is rare by design."
+  type        = number
+  default     = 2
+}
+
 variable "callers_rcu" {
   description = "Read capacity for the callers table. Read once per search and once per tool call, as an eventually consistent GetItem at 0.5 RCU, so 2 sustains about 4/sec against an account concurrency ceiling of 10. Raise this first if throttling appears."
   type        = number
@@ -104,15 +122,15 @@ variable "publish_cost_credits" {
 }
 
 variable "gsi_rcu" {
-  description = "Read capacity per global secondary index."
+  description = "Read capacity per global secondary index. Dropped from 3 to 2 to make room for the approvals table: cluster-fn scans rather than querying by day, and the events index is for a Phase 2 replay that does not exist yet."
   type        = number
-  default     = 3
+  default     = 2
 }
 
 variable "gsi_wcu" {
-  description = "Write capacity per global secondary index."
+  description = "Write capacity per global secondary index. Dropped from 3 to 2 alongside gsi_rcu."
   type        = number
-  default     = 3
+  default     = 2
 }
 
 variable "search_url_auth" {

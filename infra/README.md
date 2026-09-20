@@ -120,11 +120,45 @@ the agent rather than the adapter.
 
 Its Function URL is the one endpoint with `authorization_type = "NONE"`, which
 is correct: an agent runtime can send a bearer token and cannot sign SigV4
-against an account it has no credentials for. The endpoint is not
-unauthenticated — everything touching data needs an Endless key — but
-`initialize`, `ping` and `tools/list` do answer without one, so this is the
-public surface, and putting CloudFront and WAF in front of it is the open DDoS
-item rather than a refinement.
+against an account it has no credentials for.
+
+**Every method needs a key, `initialize` included.** The header is shape-checked
+before anything downstream is invoked, so an unauthenticated flood is refused
+for the cost of a regex. It is a shape check, not a verification — this function
+holds no credentials by design — and a well-formed but invented key still gets a
+401 from search-fn or exec-fn the moment it asks for anything real.
+
+Behind that sits a kill switch: a CloudWatch alarm on invocations trips
+`killswitch-fn`, which throttles the endpoint to zero concurrency and emails
+you. Throttled invocations are not billed. It does not undo itself —
+`terraform output mcp_restore_command` gives the one command to restore, and it
+is meant to be run after looking at why it fired.
+
+## The review gate
+
+Publishing a tool and being allowed to RUN it are two different events.
+
+```bash
+node cli/review.mjs                                     what is waiting
+node cli/review.mjs <tool_id> <version>                 read the code
+node cli/review.mjs <tool_id> <version> --approve
+node cli/review.mjs <tool_id> <version> --revoke --note "why"   the takedown path
+```
+
+**Absence of an approval is a refusal.** A missing record, a failed write, a
+brand new tool and a deliberate rejection all fail the same safe way. The
+opposite arrangement — running unless something says no — fails open on every
+one of those, and the failures look identical to success.
+
+Approvals live in their own table for two reasons. A `review_status` field on
+the version row would have to be written after publication, breaking the
+immutability invariant. More importantly, `registry-fn` holds `PutItem` on the
+tools table because it must — so if approvals lived there, the function that
+ACCEPTS submissions could APPROVE them. No Lambda has any write on the approvals
+table; approving is an operator action from real credentials, like minting.
+
+Revocation takes effect on the next call, because `exec-fn` does not cache
+approvals.
 
 ## The sandbox gate
 
@@ -181,9 +215,10 @@ the gap signal the registry exists to collect.
 
 **DynamoDB capacity is shared.** The always-free 25 RCU / 25 WCU covers every
 table *and every index* in the region, and applies to **provisioned mode only** —
-on-demand is not in the free tier. Current usage: 23/23 of 25 — the callers table
-took the last comfortable slot. Adding an index at default capacity would exceed
-it, and the next table needs capacity taken from something already here.
+on-demand is not in the free tier. Current usage: 23/23 of 25 — three tables at
+5/5, two indexes at 2/2, callers and approvals at 2/2 each. The approvals table
+was paid for by dropping both by_day indexes from 3/3 to 2/2; neither is on a
+hot path. There is no room left for another table at default capacity.
 
 **Titan V2 cosine scores sit near zero.** Not the 0.4–0.8 typical of other
 embedding models. Measured: a correct hit scored 0.0595, unrelated tools −0.007

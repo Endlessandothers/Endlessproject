@@ -53,6 +53,22 @@ data "aws_iam_policy_document" "exec" {
     resources = [aws_dynamodb_table.events.arn, "${aws_dynamodb_table.events.arn}/index/*"]
   }
 
+  # The review gate. Read only, and there is no Allow for writing anywhere on
+  # this table by any function — approving is an operator action from real
+  # credentials. A compromise of exec-fn cannot approve the code it then runs.
+  statement {
+    sid       = "ReadApprovals"
+    actions   = ["dynamodb:GetItem"]
+    resources = [aws_dynamodb_table.approvals.arn]
+  }
+
+  statement {
+    sid       = "DenyApprovalWrites"
+    effect    = "Deny"
+    actions   = concat(local.mutating_actions, ["dynamodb:PutItem"])
+    resources = [aws_dynamodb_table.approvals.arn]
+  }
+
   # Read only, as with search-fn: exec-fn identifies its caller and records the
   # result, and calling a tool costs nothing, so it has no reason to write here.
   statement {
@@ -110,11 +126,12 @@ resource "aws_lambda_function" "exec" {
 
   environment {
     variables = {
-      TOOLS_TABLE   = aws_dynamodb_table.tools.name
-      EVENTS_TABLE  = aws_dynamodb_table.events.name
-      FETCHER_FN    = aws_lambda_function.fetcher.function_name
-      RUNTIME_FN    = aws_lambda_function.runtime.function_name
-      CALLERS_TABLE = aws_dynamodb_table.callers.name
+      TOOLS_TABLE     = aws_dynamodb_table.tools.name
+      EVENTS_TABLE    = aws_dynamodb_table.events.name
+      FETCHER_FN      = aws_lambda_function.fetcher.function_name
+      RUNTIME_FN      = aws_lambda_function.runtime.function_name
+      CALLERS_TABLE   = aws_dynamodb_table.callers.name
+      APPROVALS_TABLE = aws_dynamodb_table.approvals.name
     }
   }
 

@@ -52,6 +52,9 @@ const rpcError = (id, code, message, data) => ({
 const INVALID_PARAMS = -32602;
 const METHOD_NOT_FOUND = -32601;
 const INTERNAL = -32603;
+// Outside the reserved range, in the implementation-defined space, so a client
+// can tell "you are not allowed" apart from "the server broke".
+const UNAUTHORIZED = -32001;
 
 const TOOLS = [
   {
@@ -192,8 +195,33 @@ async function callTool(name, args, auth, actor) {
   return failure(`no such tool: ${name}`);
 }
 
+// Every method needs a key, initialize and tools/list included.
+//
+// This endpoint is authorization_type NONE at the Function URL, because an
+// agent runtime can send a bearer token and cannot sign SigV4. That makes it
+// the one publicly reachable surface in Endless, so the cheapest possible
+// rejection has to come first: shape-checking the header costs nothing and no
+// downstream Lambda is invoked, no model is called and no table is read.
+//
+// It is a SHAPE check, not a verification — this function holds no credentials
+// and reads no table, by design. A well-formed but invented key still gets a
+// 401, from search-fn or exec-fn, the moment it asks for anything real. What
+// this stops is the free part of the flood: unauthenticated requests that would
+// otherwise make the server work for nothing.
+//
+// MCP clients send Authorization on every request including initialize, so this
+// costs a legitimate client nothing.
+const KEY_SHAPE = /^Bearer\s+elk_[a-z0-9][a-z0-9-]{1,38}_.+$/i;
+
 async function dispatch(req, auth) {
   const { id = null, method, params = {} } = req ?? {};
+
+  if (!KEY_SHAPE.test(String(auth ?? ""))) {
+    // Notifications still get nothing back, even when refused.
+    if (id === null || id === undefined) return null;
+    return rpcError(id, UNAUTHORIZED,
+      "an Endless API key is required: send it as Authorization: Bearer elk_<caller>_<secret>");
+  }
 
   switch (method) {
     case "initialize":

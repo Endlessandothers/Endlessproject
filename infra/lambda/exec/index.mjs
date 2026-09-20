@@ -16,6 +16,7 @@ import { DynamoDBDocumentClient, QueryCommand, GetCommand, PutCommand } from "@a
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { randomUUID } from "node:crypto";
 import { authenticate, provenanceOf, isSelfCall } from "./auth.mjs";
+import { mayExecute, refusalReason } from "./gate.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
@@ -25,6 +26,7 @@ const EVENTS = process.env.EVENTS_TABLE;
 const FETCHER_FN = process.env.FETCHER_FN;
 const RUNTIME_FN = process.env.RUNTIME_FN;
 const CALLERS = process.env.CALLERS_TABLE;
+const APPROVALS = process.env.APPROVALS_TABLE;
 
 const json = (status, body) => ({
   statusCode: status,
@@ -66,6 +68,23 @@ async function resolveTool(toolId, version) {
     ScanIndexForward: false, Limit: 1,
   }));
   return out.Items?.[0] ?? null;
+}
+
+// The review gate.
+//
+// Publishing a tool and being allowed to RUN it are two different events.
+// ABSENCE OF AN APPROVAL IS A REFUSAL: a version nobody has looked at does not
+// execute, so the failure mode of a missing record, a failed write or a brand
+// new tool is all the same safe one.
+//
+// Not cached, for the reason the callers table is not cached: a revoked tool
+// has to stop running on the next call, and revocation that takes effect
+// whenever a container recycles is not revocation.
+async function approvalFor(toolId, version) {
+  const out = await ddb.send(new GetCommand({
+    TableName: APPROVALS, Key: { tool_id: toolId, version },
+  }));
+  return out.Item ?? null;
 }
 
 // Inputs are checked here rather than in the tool, because a tool that
@@ -140,6 +159,17 @@ export const handler = async (event) => {
       return await fail(409, `${tool_id}@${tool.version} is registered but carries no executable package`);
     }
 
+    // Checked BEFORE the input schema, the fetch and the transform, so an
+    // unapproved tool costs one GetItem rather than a round trip to somebody
+    // else's API and a sandbox invocation.
+    const approval = await approvalFor(tool_id, tool.version);
+    if (!mayExecute(approval)) {
+      const state = refusalReason(approval);
+      return await fail(403, `${tool_id}@${tool.version} is not approved for execution (${state})`, {
+        version: tool.version, stage: "review",
+      });
+    }
+
     const schemaErrors = validateInput(tool.input_schema, input);
     if (schemaErrors.length) return await fail(400, schemaErrors.join("; "), { version: tool.version });
 
@@ -164,6 +194,9 @@ export const handler = async (event) => {
     await recordEvent({
       tool_id, version: tool.version, outcome: "success", ms,
       transform_ms: ran.ms ?? null, ...provenance,
+      // Which review let this run. Ownership and approvals both change, and an
+      // event has to stay true to the moment it was written.
+      approved_by: approval.reviewer ?? null,
       // Flagged at write time, not inferred later: ownership on either side can
       // change, and the log has to stay true to the moment. A call by the tool's
       // own owner is not demand and must never count toward mass.
