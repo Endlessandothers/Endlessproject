@@ -133,8 +133,19 @@ async function recordEvent(fields) {
 async function runTool({ toolId, version, input, provenance, chain, viaTool, rootCallId }) {
   const started = Date.now();
 
+  // Set as soon as the tool row is resolved, and carried on EVERY event after
+  // that — successes and failures alike.
+  //
+  // It used to be stamped only on the success path, which made the flag
+  // asymmetric: a self-call that worked was correctly excluded from mass, while
+  // a self-call that failed still counted against brightness. Found by reading
+  // a live score where an owner's own tool showed brightness 0 with every one
+  // of its successful calls excluded and only its failures surviving.
+  let selfCall = false;
+
   const record = (fields) => recordEvent({
     tool_id: toolId, ...provenance,
+    self_call: selfCall,
     // The dependency edge, recorded on the event itself. This is what makes the
     // graph real: without it there is nothing to weigh, and dependency weight
     // would be a claim rather than a measurement.
@@ -155,6 +166,9 @@ async function runTool({ toolId, version, input, provenance, chain, viaTool, roo
 
   const tool = await resolveTool(toolId, version);
   if (!tool) return await fail(404, `no such tool: ${toolId}${version ? `@${version}` : ""}`);
+  // Ownership on either side can change, so this is decided now and written
+  // onto the log, never inferred afterwards.
+  selfCall = isSelfCall({ owner: provenance.owner }, tool);
   if (!tool.handler_source) {
     return await fail(409, `${toolId}@${tool.version} is registered but carries no executable package`);
   }
@@ -244,9 +258,6 @@ async function runTool({ toolId, version, input, provenance, chain, viaTool, roo
     // Which review let this run. Ownership and approvals both change, and an
     // event has to stay true to the moment it was written.
     approved_by: approval.reviewer ?? null,
-    // A call by the tool's own owner is not demand, flagged at write time
-    // because ownership on either side can change afterwards.
-    self_call: isSelfCall({ owner: provenance.owner }, tool),
     dependencies: (tool.uses ?? []).map((u) => u.tool_id),
   });
 

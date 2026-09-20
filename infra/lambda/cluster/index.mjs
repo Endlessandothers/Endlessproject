@@ -22,7 +22,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createHash } from "node:crypto";
 import { unpackVector } from "./vector.mjs";
 import { cluster, summarise, assess, RULE, DEFAULT_SIMILARITY } from "./cluster.mjs";
-import { scoreTools, assertNoPaidInputs, ownershipTrustworthy } from "./mass.mjs";
+import { scoreTools, assertNoPaidInputs, ownershipTrustworthy, DEPENDENCY_DAMPING } from "./mass.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -77,6 +77,11 @@ async function computeMass() {
     type: i.type, tool_id: i.tool_id, outcome: i.outcome, ms: i.ms, ts: i.ts,
     caller_id: i.caller_id ?? null, owner: i.owner ?? null,
     actor_verified: i.actor_verified === true, self_call: i.self_call === true,
+    // The dependency edge. Phase 2 reads the graph off the log rather than off
+    // what tools declare, because declaring a dependency is free and being
+    // built upon is not.
+    via_tool: i.via_tool ?? null,
+    simulated: i.simulated === true,
   }));
 
   // Latest version per tool, so a tool is one row however many versions it has.
@@ -89,7 +94,9 @@ async function computeMass() {
     if (!seen || Number(t.version) > Number(seen.version)) latest.set(t.tool_id, t);
   }
 
-  const rows = scoreTools([...latest.keys()], events).map((row) => {
+  // Tool rows rather than ids: dependency weight needs to know who owns what,
+  // to refuse standing earned by depending on your own tool.
+  const rows = scoreTools([...latest.values()], events).map((row) => {
     const t = latest.get(row.tool_id);
     // Invariant #3, enforced rather than asserted: if a ranking input ever
     // arrives that came from a payment, this throws and the run fails loudly
@@ -104,14 +111,17 @@ async function computeMass() {
 
   return {
     generated_at: new Date().toISOString(),
-    scoring: "mass-only",
+    scoring: "mass, brightness and dependency weight — computed apart, never blended",
     // Said in the artefact, not only in the docs, because this is the file
     // anything downstream will read.
-    note: "Mass is successful, verified, non-self calls. Recomputed from the event log; nothing is accumulated. No paid input touches this ranking.",
+    note: "Mass is successful, verified, non-self DIRECT calls; a call arriving via another tool is dependency weight instead. Brightness is a Wilson lower bound on the success rate, so evidence must accumulate before it does. Dependency weight flows from a dependent's own direct mass and is refused when the dependent shares an owner. Recomputed from the event log; nothing is accumulated. No paid input touches any of it.",
+    damping: DEPENDENCY_DAMPING,
     tools_total: rows.length,
     tools_with_usage: rows.filter((r) => r.mass > 0).length,
     tools_with_unverified_ownership: rows.filter((r) => !r.ownership_verified).length,
+    tools_depended_on: rows.filter((r) => r.dependents > 0).length,
     events_scanned: events.length,
+    simulated_excluded: events.filter((e) => e.simulated).length,
     tools: rows,
   };
 }
