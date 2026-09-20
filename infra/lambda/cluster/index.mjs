@@ -27,6 +27,7 @@ import {
   competitionClusters, decayOf, BASE_HALF_LIFE_DAYS, STANDING_WINDOW_DAYS,
 } from "./decay.mjs";
 import { buildWorld } from "./world.mjs";
+import { audit } from "./audit.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -144,7 +145,16 @@ async function computeMass() {
     });
   });
 
+  // The published view and the raw material it was built from, kept apart.
+  //
+  // The audit needs the events, the clusters and the owners; tools.json must
+  // not contain any of them. Returning two things rather than one means the
+  // published object cannot accidentally grow an internal field.
   return {
+    events,
+    clusters,
+    tools: [...latest.values()].map((t) => ({ tool_id: t.tool_id, owner: t.owner })),
+    view: {
     generated_at: new Date().toISOString(),
     scoring: "mass, brightness, dependency weight and decay — computed apart, never blended",
     // Said in the artefact, not only in the docs, because this is the file
@@ -162,6 +172,7 @@ async function computeMass() {
     events_scanned: events.length,
     simulated_excluded: events.filter((e) => e.simulated).length,
     tools: rows,
+    },
   };
 }
 
@@ -260,7 +271,9 @@ export const handler = async () => {
     }));
   }
 
-  const mass = await computeMass();
+  // `clusters` in this scope is already the GAP clusters. These are the
+  // competition clusters, which are a different graph over different things.
+  const { events, clusters: competition, tools: toolOwners, view: mass } = await computeMass();
 
   // THE WORLD VIEW, built last and kept in its own file.
   //
@@ -269,6 +282,23 @@ export const handler = async () => {
   // HERE and nowhere else, from an object no part of the agent path touches, so
   // a paid field cannot reach a ranking through somebody forgetting it exists.
   // See world.mjs and cli/stasis.mjs.
+  // The anti-gaming pass. Phase 2, issue #6.
+  //
+  // Written to a PRIVATE object, not published. It names callers and owners and
+  // says which of them look like sock puppets, which is an accusation a machine
+  // is not entitled to make in public. Every pattern in it has an innocent
+  // explanation; it exists so a person can look before money moves.
+  const flags = audit({
+    rows: mass.tools, events, clusters: competition, tools: toolOwners,
+  });
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET, Key: "audit.json",
+    Body: JSON.stringify(flags, null, 2),
+    ContentType: "application/json",
+    CacheControl: "no-store",
+  }));
+  console.log(JSON.stringify({ metric: "audit_run", flags: flags.flag_count }));
+
   const stasis = await loadStasis();
   const world = buildWorld(mass.tools, stasis);
   await s3.send(new PutObjectCommand({
@@ -306,5 +336,7 @@ export const handler = async () => {
   return {
     ok: true, ...publicView, clusters: undefined,
     tools_total: mass.tools_total, tools_with_usage: mass.tools_with_usage,
+    audit_flags: flags.flag_count,
+    stars: world.stars, sponsored: world.sponsored,
   };
 };

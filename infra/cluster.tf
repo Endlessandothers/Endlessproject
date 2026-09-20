@@ -125,6 +125,10 @@ data "aws_iam_policy_document" "cluster" {
       # does not CONTAIN the paid state, so consuming it by accident is not
       # possible rather than merely discouraged. See lambda/cluster/world.mjs.
       "${aws_s3_bucket.board.arn}/world.json",
+      # The anti-gaming pass. PRIVATE, like sim-gaps.json: it names callers and
+      # owners and says which look like sock puppets, which is an accusation a
+      # machine is not entitled to make in public.
+      "${aws_s3_bucket.board.arn}/audit.json",
     ]
   }
 
