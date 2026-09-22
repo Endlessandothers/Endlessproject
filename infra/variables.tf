@@ -110,9 +110,9 @@ variable "app_desired_count" {
 }
 
 variable "mcp_flood_threshold" {
-  description = "Invocations of the public MCP endpoint in five minutes that trip the kill switch. Far above anything real traffic does today: the whole blind-set replay was 35 requests, and the account's concurrency ceiling of 10 caps a flood near 500/sec, so this fires within a minute of one starting. Revisit when there is real traffic to revisit it against."
+  description = "Invocations of the public MCP endpoint in five minutes that trip the kill switch. Lowered from 2000 when the adjudicator moved to Claude: a search went from $0.000015 to about $0.00124, so the old ceiling stopped being an abuse detector priced at three cents and became one priced at $2.48 per window — roughly $700 a day if a flood simply sustained itself under the alarm. 250 is still an order of magnitude above anything real traffic does today (the whole blind-set replay was 35 requests) and caps an undetected flood near 30 cents. Revisit when there is real traffic to revisit it against."
   type        = number
-  default     = 2000
+  default     = 250
 }
 
 variable "approvals_rcu" {
