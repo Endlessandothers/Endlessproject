@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Endless — the world</title>
+<style>
+  :root{
+    --bg:#07070c; --ink:#ececf0; --dim:#8a8a99; --line:#23232e;
+    --accent:#ED7100; --dust:#c98a3a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);overflow:hidden;
+       font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  canvas{display:block;position:fixed;inset:0;touch-action:none}
+
+  .hud{position:fixed;top:0;left:0;right:0;padding:16px;pointer-events:none;
+       display:flex;flex-direction:column;gap:10px}
+  .hud > *{pointer-events:auto}
+  .bar{display:flex;gap:8px;align-items:center;max-width:640px;width:100%}
+  .bar input{flex:1;min-width:0;padding:11px 14px;border-radius:10px;
+    border:1px solid var(--line);background:rgba(12,12,20,.86);color:var(--ink);
+    font:inherit;backdrop-filter:blur(8px)}
+  .bar input::placeholder{color:var(--dim)}
+  .bar button{padding:11px 18px;border-radius:10px;border:0;background:var(--accent);
+    color:#fff;font:inherit;font-weight:650;cursor:pointer;white-space:nowrap}
+  .bar button:disabled{opacity:.45;cursor:default}
+  .status{font-size:.8rem;color:var(--accent);min-height:1.2em;pointer-events:none;
+          text-shadow:0 0 18px rgba(237,113,0,.5)}
+
+  .title{position:fixed;top:0;right:0;padding:18px 20px;text-align:right;
+         font-size:.76rem;color:var(--dim);line-height:1.7;pointer-events:none}
+  .title b{display:block;font-size:1rem;color:var(--ink);letter-spacing:-.01em}
+  .title b span{color:var(--accent)}
+  .title a{color:var(--dim);pointer-events:auto}
+
+  .panel{position:fixed;left:16px;bottom:16px;width:min(420px,calc(100vw - 32px));
+    background:rgba(12,12,20,.92);border:1px solid var(--line);border-radius:14px;
+    padding:16px 18px;backdrop-filter:blur(10px);
+    transform:translateY(calc(100% + 30px));transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+  .panel.up{transform:none}
+  .panel h2{margin:0 0 2px;font-size:1.02rem}
+  .panel .sub{color:var(--dim);font-size:.83rem;margin:0 0 10px}
+  .panel .desc{font-size:.87rem;color:#bfbfcc;margin:0 0 12px}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--dim);
+         font-variant-numeric:tabular-nums;margin-bottom:12px}
+  .stats b{color:var(--ink);font-weight:650}
+  .panel input.args{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
+    background:#0b0b13;color:var(--ink);font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .panel .row{display:flex;gap:8px;margin-top:10px}
+  .panel button{padding:9px 15px;border-radius:8px;border:0;background:var(--accent);
+    color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  .panel button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+  pre{margin:12px 0 0;max-height:32vh;overflow:auto;background:#0b0b13;border:1px solid var(--line);
+      border-radius:8px;padding:11px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+      color:#b9d8c6;white-space:pre-wrap;word-break:break-word}
+  .gapnote{border-left:3px solid var(--dust);padding-left:12px;color:var(--dust);font-size:.86rem}
+  .gapnote ul{margin:6px 0 0;padding-left:18px;color:var(--dim)}
+
+  .legend{position:fixed;left:16px;bottom:16px;font-size:.72rem;color:var(--dim);
+    background:rgba(12,12,20,.8);border:1px solid var(--line);border-radius:12px;
+    padding:11px 14px;backdrop-filter:blur(8px);line-height:1.9;transition:opacity .3s}
+  .legend.hide{opacity:0;pointer-events:none}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:-1px}
+  @media (max-width:560px){ .legend{display:none} .title{font-size:.7rem;padding:14px} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="title">
+  <b>End<span>less</span> — the world</b>
+  every tool a place · <a href="/">back to the plain page</a>
+</div>
+
+<div class="hud">
+  <div class="bar">
+    <input id="q" placeholder="what do you need done?" autocomplete="off" spellcheck="false">
+    <button id="go">Go</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="legend" id="legend">
+  <div><i style="background:#ED7100;box-shadow:0 0 10px #ED7100"></i> lit — called, and it worked</div>
+  <div><i style="background:#3a3a4a"></i> unlit — never called, so nothing is known</div>
+  <div><i style="background:#c98a3a;opacity:.6"></i> dust — a need nobody met</div>
+  <div style="opacity:.7;margin-top:4px">size is use · moons are tools built on it</div>
+</div>
+
+<div class="panel" id="panel"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const TAU = Math.PI * 2;
+const lerp = (a, b, t) => a + (b - a) * t;
+// Starts and ends at rest, so it reads as a journey rather than a jump.
+const ease = (t) => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+
+// A stable number per tool id, so a world keeps its place and its colour
+// between visits. A map that reshuffles on reload is a map you cannot learn.
+function hash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0);
+}
+
+const canvas = $("#c"), ctx = canvas.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resize();
+addEventListener("resize", resize);
+
+const cam = { x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1 };
+const stars = Array.from({ length: 220 }, () => ({
+  x: (Math.random() - .5) * 3200, y: (Math.random() - .5) * 3200,
+  r: Math.random() * 1.1 + .25, tw: Math.random() * TAU, depth: .25 + Math.random() * .5,
+}));
+
+let bodies = [], gaps = [];
+const home = { x: 0, y: 0 };
+const dust = [];   // transient particles: a record being written
+let probe = null;  // the ride
+let hovered = null, selected = null;
+
+const world = (sx, sy) => ({ x: (sx - W/2)/cam.z + cam.x, y: (sy - H/2)/cam.z + cam.y });
+const screenOf = (p) => ({ x: (p.x - cam.x) * cam.z + W/2, y: (p.y - cam.y) * cam.z + H/2 });
+
+function makeMotes(n, spread) {
+  return Array.from({ length: n }, () => ({
+    a: Math.random() * TAU, d: 14 + Math.random() * spread,
+    rate: (.0004 + Math.random() * .0011) * (Math.random() < .5 ? -1 : 1),
+    r: .6 + Math.random() * 1.4, ph: Math.random() * TAU,
+  }));
+}
+
+async function load() {
+  const [tj, gj] = await Promise.all([
+    fetch("/api/board?file=tools").then(r => r.json()).catch(() => ({ tools: [] })),
+    fetch("/api/board?file=gaps").then(r => r.json()).catch(() => ({ clusters: [] })),
+  ]);
+
+  const tools = tj.tools ?? [];
+  const maxMass = Math.max(1, ...tools.map(t => t.live_mass ?? 0));
+
+  // Busy at the centre, quiet at the rim. Not decoration: decay moves a tool
+  // outward as it stops being called, so the drift itself is the story.
+  const sorted = [...tools].sort((a, b) => (b.live_mass ?? 0) - (a.live_mass ?? 0));
+  bodies = sorted.map((t, i) => {
+    const h = hash(t.tool_id);
+    const a = i * 2.39996 + ((h % 1000) / 1000) * .55;       // golden angle: no clumping
+    const busy = Math.min(1, (t.live_mass ?? 0) / maxMass);
+    const jitter = .72 + ((h >> 9) % 1000) / 1000 * .46;
+    const r = lerp(190, 700, Math.pow(1 - busy, .85)) * jitter;
+    const lit = t.brightness != null && (t.mass ?? 0) > 0;
+    return {
+      ...t, x: Math.cos(a) * r, y: Math.sin(a) * r,
+      radius: 10 + Math.sqrt(t.live_mass ?? 0) * 7,
+      hue: (h >> 3) % 360, lit, glow: lit ? t.brightness : 0,
+      spin: ((h >> 5) % 100) / 100 * TAU, spinRate: .00018 + ((h >> 11) % 60) / 900000,
+      moons: Array.from({ length: Math.min(t.dependents ?? 0, 4) }, (_, k) => ({
+        id: (t.dependent_tools ?? [])[k], a: ((h >> (k + 2)) % 628) / 100,
+        rate: .0011 - k * .00018,
+      })),
+      pulse: 0,
+    };
+  });
+
+  // Gaps sit outside the rim, in the empty space that is the point of them.
+  gaps = (gj.clusters ?? []).map((c) => {
+    const h = hash(c.id);
+    const a = (h % 1000) / 1000 * TAU;
+    const r = 820 + ((h >> 7) % 240);
+    return { ...c, x: Math.cos(a) * r, y: Math.sin(a) * r,
+             motes: makeMotes(c.confirmed ? 46 : 30, c.confirmed ? 30 : 48) };
+  });
+}
+
+// ---------------------------------------------------------------- the ride
+//
+// A quadratic arc rather than a straight line: a straight line reads as a state
+// change, an arc reads as a journey — which is the entire reason for drawing
+// this instead of printing a row.
+function launch(target, opts) {
+  const c = {
+    x: (home.x + target.x) / 2 - (target.y - home.y) * .28,
+    y: (home.y + target.y) / 2 + (target.x - home.x) * .28,
+  };
+  probe = {
+    from: { x: home.x, y: home.y }, to: { x: target.x, y: target.y }, c,
+    t: 0, dur: 1500 + Math.min(1400, Math.hypot(target.x - home.x, target.y - home.y) * 1.6),
+    phase: "out", wait: 0, trail: [], target, ...opts,
+  };
+  cam.tx = target.x; cam.ty = target.y;
+  cam.tz = opts.mode === "gap" ? .8 : 1.28;
+}
+
+function probePos(p, t) {
+  const u = 1 - t;
+  return { x: u*u*p.from.x + 2*u*t*p.c.x + t*t*p.to.x,
+           y: u*u*p.from.y + 2*u*t*p.c.y + t*t*p.to.y };
+}
+
+function puff(x, y, n, spread, colour) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, s = Math.random() * spread;
+    dust.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: 1, decay: .004 + Math.random() * .008,
+      r: 1 + Math.random() * 3.4, colour: colour ?? "201,138,58" });
+  }
+}
+
+function step(dt) {
+  cam.x = lerp(cam.x, cam.tx, 1 - Math.pow(.0022, dt/1000));
+  cam.y = lerp(cam.y, cam.ty, 1 - Math.pow(.0022, dt/1000));
+  cam.z = lerp(cam.z, cam.tz, 1 - Math.pow(.004, dt/1000));
+
+  for (const b of bodies) {
+    b.spin += b.spinRate * dt;
+    for (const m of b.moons) m.a += m.rate * dt;
+    if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - dt / 900);
+  }
+  for (const g of gaps) for (const m of g.motes) m.a += m.rate * dt;
+
+  for (let i = dust.length - 1; i >= 0; i--) {
+    const d = dust[i];
+    d.x += d.vx * dt / 16; d.y += d.vy * dt / 16;
+    d.vx *= .985; d.vy *= .985;
+    d.life -= d.decay * dt / 16;
+    if (d.life <= 0) dust.splice(i, 1);
+  }
+
+  if (!probe) return;
+  const p = probe;
+  if (p.phase === "out") {
+    p.t = Math.min(1, p.t + dt / p.dur);
+    const pos = probePos(p, ease(p.t));
+    p.trail.push({ x: pos.x, y: pos.y, life: 1 });
+    if (p.trail.length > 70) p.trail.shift();
+    if (p.t >= 1) {
+      p.phase = "arrive"; p.wait = 0;
+      p.onArrive?.();
+      if (p.mode === "gap") {
+        // Nothing here does it. The dust IS the record being written.
+        for (let i = 0; i < 5; i++) setTimeout(() => puff(p.to.x, p.to.y, 26, 1.5), i * 170);
+      } else {
+        p.target.pulse = 1;
+        puff(p.to.x, p.to.y, 16, .8, "237,113,0");
+      }
+    }
+  } else if (p.phase === "arrive") {
+    p.wait += dt;
+    if (p.wait > (p.mode === "gap" ? 1600 : 1000)) { p.phase = "back"; p.t = 1; }
+  } else {
+    p.t = Math.max(0, p.t - dt / (p.dur * .8));
+    const pos = probePos(p, ease(p.t));
+    p.trail.push({ x: pos.x, y: pos.y, life: 1 });
+    if (p.trail.length > 70) p.trail.shift();
+    if (p.t <= 0) {
+      p.onDone?.();
+      probe = null;
+      cam.tx = 0; cam.ty = 0; cam.tz = 1;
+    }
+  }
+  for (const t of p.trail) t.life -= dt / 900;
+}
+
+// ---------------------------------------------------------------- drawing
+function draw(now) {
+  ctx.fillStyle = "#07070c";
+  ctx.fillRect(0, 0, W, H);
+
+  // Parallax starfield. Depth is what stops a pan feeling like a slide.
+  for (const s of stars) {
+    const sx = (s.x - cam.x * s.depth) * cam.z + W/2;
+    const sy = (s.y - cam.y * s.depth) * cam.z + H/2;
+    if (sx < -40 || sx > W + 40 || sy < -40 || sy > H + 40) continue;
+    ctx.globalAlpha = (.35 + .65 * (Math.sin(now * .0009 + s.tw) * .5 + .5)) * .8;
+    ctx.fillStyle = "#cfd4ff";
+    ctx.beginPath(); ctx.arc(sx, sy, s.r, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Gaps first: they sit behind everything, out in the dark.
+  ctx.textAlign = "center";
+  for (const g of gaps) {
+    const s = screenOf(g);
+    if (s.x < -300 || s.x > W + 300 || s.y < -300 || s.y > H + 300) continue;
+
+    if (g.confirmed) {
+      // Far enough along to have a core: this one is ready to be built.
+      const core = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 26 * cam.z);
+      core.addColorStop(0, "rgba(220,170,90,.5)");
+      core.addColorStop(1, "rgba(220,170,90,0)");
+      ctx.fillStyle = core;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 26 * cam.z, 0, TAU); ctx.fill();
+    }
+    for (const m of g.motes) {
+      const wob = Math.sin(now * .0013 + m.ph) * 5;
+      const mx = s.x + Math.cos(m.a) * (m.d + wob) * cam.z;
+      const my = s.y + Math.sin(m.a) * (m.d + wob) * .62 * cam.z;
+      ctx.globalAlpha = (g.confirmed ? .6 : .34) * (.5 + .5 * Math.sin(now * .002 + m.ph));
+      ctx.fillStyle = "#c98a3a";
+      ctx.beginPath(); ctx.arc(mx, my, m.r * cam.z, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (cam.z > .6) {
+      const k = Math.min(cam.z, 1.2);
+      ctx.font = (11 * k) + "px ui-sans-serif,system-ui,sans-serif";
+      ctx.fillStyle = "rgba(201,138,58,.9)";
+      ctx.fillText(g.label ?? "a need nobody met", s.x, s.y + 66 * cam.z);
+      ctx.font = (9.5 * k) + "px ui-sans-serif,system-ui,sans-serif";
+      ctx.fillStyle = "rgba(138,138,153,.8)";
+      ctx.fillText(g.confirmed ? "asked enough times — ready to build"
+                               : (g.distinct_callers ?? 1) + " caller so far",
+                   s.x, s.y + 80 * cam.z);
+    }
+  }
+
+  // Home: where a request leaves from.
+  const hs = screenOf(home);
+  ctx.strokeStyle = "rgba(140,150,190,.5)"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, 15 * cam.z, 0, TAU); ctx.stroke();
+  ctx.globalAlpha = .45 + .25 * Math.sin(now * .002);
+  ctx.fillStyle = "#aab3d8";
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, 6.5 * cam.z, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
+  if (cam.z > .7) {
+    ctx.font = (10 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillStyle = "rgba(160,168,200,.7)";
+    ctx.fillText("you", hs.x, hs.y + 30 * cam.z);
+  }
+
+  // The worlds.
+  for (const b of bodies) {
+    const s = screenOf(b);
+    const R = b.radius * cam.z;
+    if (s.x < -200 || s.x > W + 200 || s.y < -200 || s.y > H + 200) continue;
+
+    // Brightness is a Wilson lower bound over calls that worked. An unlit world
+    // is not a broken one — it is one nothing is known about yet, and drawing
+    // those the same would be the most misleading thing on this screen.
+    if (b.lit) {
+      const gl = (18 + b.glow * 46 + b.pulse * 34) * cam.z;
+      const g = ctx.createRadialGradient(s.x, s.y, R * .7, s.x, s.y, R + gl);
+      g.addColorStop(0, "hsla(" + b.hue + ",72%,62%," + (.34 + b.glow * .3 + b.pulse * .34) + ")");
+      g.addColorStop(1, "hsla(" + b.hue + ",72%,62%,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(s.x, s.y, R + gl, 0, TAU); ctx.fill();
+    }
+
+    // Orbit ring for anything with tools built on it.
+    if (b.moons.length) {
+      ctx.strokeStyle = b.lit ? "hsla(" + b.hue + ",50%,66%,.22)" : "rgba(120,120,140,.14)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, R + 22, (R + 22) * .42, 0, 0, TAU);
+      ctx.stroke();
+    }
+
+    // The body, lit from one side so it reads as a sphere rather than a dot.
+    const body = ctx.createRadialGradient(s.x - R * .35, s.y - R * .4, R * .1, s.x, s.y, R);
+    if (b.lit) {
+      body.addColorStop(0, "hsl(" + b.hue + ",68%," + (58 + b.glow * 16) + "%)");
+      body.addColorStop(.75, "hsl(" + b.hue + ",62%," + (28 + b.glow * 10) + "%)");
+      body.addColorStop(1, "hsl(" + b.hue + ",55%,12%)");
+    } else {
+      body.addColorStop(0, "#4a4a5c");
+      body.addColorStop(.75, "#2b2b38");
+      body.addColorStop(1, "#15151d");
+    }
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, TAU); ctx.fill();
+
+    // A band, turning, so it is visibly a world and not a bullet point.
+    ctx.save();
+    ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, TAU); ctx.clip();
+    ctx.globalAlpha = b.lit ? .2 : .1;
+    ctx.strokeStyle = b.lit ? "hsl(" + ((b.hue + 40) % 360) + ",70%,72%)" : "#7b7b90";
+    ctx.lineWidth = Math.max(1, R * .16);
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y + Math.sin(b.spin) * R * .3, R * 1.1, R * .3, 0, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+
+    if (selected === b || hovered === b) {
+      ctx.strokeStyle = selected === b ? "rgba(237,113,0,.9)" : "rgba(255,255,255,.4)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(s.x, s.y, R + 7, 0, TAU); ctx.stroke();
+    }
+    if (b.archived) {
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = "rgba(150,150,165,.45)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(s.x, s.y, R + 12, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Moons: tools built on this one. The whole reason a registry beats a list.
+    for (const m of b.moons) {
+      const mx = s.x + Math.cos(m.a) * (R + 22);
+      const my = s.y + Math.sin(m.a) * (R + 22) * .42;
+      ctx.fillStyle = "#d8dcf0";
+      ctx.beginPath(); ctx.arc(mx, my, 3 * Math.max(cam.z, .6), 0, TAU); ctx.fill();
+    }
+
+    if (cam.z > .55) {
+      const k = Math.min(cam.z, 1.15);
+      ctx.font = (11.5 * k) + "px ui-sans-serif,system-ui,sans-serif";
+      ctx.fillStyle = b.lit ? "rgba(236,236,240,.92)" : "rgba(160,160,178,.62)";
+      ctx.fillText(b.name ?? b.tool_id, s.x, s.y + R + 17 * k);
+      if ((b.mass ?? 0) > 0 && cam.z > .8) {
+        ctx.font = (9.5 * k) + "px ui-sans-serif,system-ui,sans-serif";
+        ctx.fillStyle = "rgba(138,138,153,.8)";
+        ctx.fillText(b.mass + (b.mass === 1 ? " call" : " calls"), s.x, s.y + R + 30 * k);
+      }
+    }
+  }
+
+  // Transient dust — a gap being written down, or an arrival.
+  for (const d of dust) {
+    const s = screenOf(d);
+    ctx.globalAlpha = Math.max(0, d.life) * .8;
+    ctx.fillStyle = "rgb(" + d.colour + ")";
+    ctx.beginPath(); ctx.arc(s.x, s.y, d.r * cam.z, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // The probe and its wake.
+  if (probe) {
+    ctx.lineCap = "round";
+    for (let i = 1; i < probe.trail.length; i++) {
+      const sa = screenOf(probe.trail[i - 1]), sb = screenOf(probe.trail[i]);
+      ctx.globalAlpha = Math.max(0, probe.trail[i].life) * .55;
+      ctx.strokeStyle = probe.mode === "gap" ? "#c98a3a" : "#ED7100";
+      ctx.lineWidth = Math.max(.6, 2.6 * (i / probe.trail.length) * cam.z);
+      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    const t = probe.phase === "arrive" ? 1 : ease(probe.t);
+    const pos = probePos(probe, t);
+    const ahead = probePos(probe, Math.min(1, t + .012));
+    const s = screenOf(pos);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(probe.phase === "arrive" ? now * .003 : Math.atan2(ahead.y - pos.y, ahead.x - pos.x));
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "#ED7100"; ctx.shadowBlur = 14;
+    const k = 7 * Math.max(cam.z, .8);
+    ctx.beginPath();
+    ctx.moveTo(k, 0); ctx.lineTo(-k * .7, k * .6); ctx.lineTo(-k * .35, 0); ctx.lineTo(-k * .7, -k * .6);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.shadowBlur = 0;
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(48, now - last); last = now;
+  step(dt); draw(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------- interaction
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => {
+  drag = { x: e.clientX, y: e.clientY, cx: cam.tx, cy: cam.ty, moved: false };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (drag) {
+    const dx = (e.clientX - drag.x) / cam.z, dy = (e.clientY - drag.y) / cam.z;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    cam.tx = drag.cx - dx; cam.ty = drag.cy - dy;
+    cam.x = cam.tx; cam.y = cam.ty;
+    return;
+  }
+  const w = world(e.clientX, e.clientY);
+  hovered = bodies.find(b => Math.hypot(b.x - w.x, b.y - w.y) < b.radius + 10) ?? null;
+  canvas.style.cursor = hovered ? "pointer" : "grab";
+});
+canvas.addEventListener("pointerup", (e) => {
+  if (drag && !drag.moved) {
+    const w = world(e.clientX, e.clientY);
+    const hit = bodies.find(b => Math.hypot(b.x - w.x, b.y - w.y) < b.radius + 10);
+    if (hit) showTool(hit);
+    else { selected = null; hidePanel(); }
+  }
+  drag = null;
+});
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  cam.tz = Math.max(.35, Math.min(2.4, cam.tz * (e.deltaY > 0 ? .9 : 1.11)));
+}, { passive: false });
+
+// ---------------------------------------------------------------- panel
+const panel = $("#panel");
+const setStatus = (s) => { $("#status").textContent = s ?? ""; };
+function hidePanel() { panel.classList.remove("up"); $("#legend").classList.remove("hide"); }
+function showPanel(html) { panel.innerHTML = html; panel.classList.add("up"); $("#legend").classList.add("hide"); }
+
+function showTool(b) {
+  selected = b;
+  const pct = (v) => v == null ? "—" : Math.round(v * 100) + "%";
+  showPanel(
+    "<h2>" + esc(b.name ?? b.tool_id) + "</h2>" +
+    "<p class=\"sub\">" + esc(b.tool_id) + (b.version ? " · v" + esc(b.version) : "") +
+      (b.archived ? " · dormant" : "") + "</p>" +
+    "<div class=\"stats\">" +
+      "<span><b>" + (b.mass ?? 0) + "</b> calls</span>" +
+      "<span><b>" + (b.distinct_callers ?? 0) + "</b> callers</span>" +
+      "<span>reliability <b>" + pct(b.brightness) + "</b></span>" +
+      "<span><b>" + (b.dependents ?? 0) + "</b> built on it</span>" +
+    "</div>" +
+    (b.lit ? "" : "<p class=\"desc\" style=\"color:var(--dim)\">Never called. Nothing is known about whether " +
+      "it works — which is why it is drawn unlit rather than dim.</p>") +
+    "<label class=\"sub\" style=\"display:block;margin-bottom:5px\">Arguments, as JSON</label>" +
+    "<input class=\"args\" id=\"args\" value=\"{}\" spellcheck=\"false\">" +
+    "<div class=\"row\"><button id=\"run\">Run it</button>" +
+    "<button class=\"ghost\" id=\"close\">Close</button></div><div id=\"res\"></div>");
+  $("#close").onclick = () => { selected = null; hidePanel(); };
+  $("#run").onclick = () => runTool(b);
+}
+
+async function mcp(name, args) {
+  const res = await fetch("/api/mcp", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, arguments: args }),
+  });
+  const body = await res.json();
+  if (body.error && !body.result) throw new Error(body.error.message ?? body.error);
+  const block = body.result?.content?.[0]?.text;
+  if (body.result?.isError) throw new Error(block || "failed");
+  try { return JSON.parse(block); } catch { return { raw: block }; }
+}
+
+async function runTool(b) {
+  if (probe) return;
+  const out = $("#res");
+  let args;
+  try { args = JSON.parse($("#args").value || "{}"); }
+  catch { out.innerHTML = "<pre style=\"color:#e08a8a\">Arguments are not valid JSON.</pre>"; return; }
+  out.innerHTML = "<pre>flying out to it…</pre>";
+  // Fly to the tool and bring the answer back, rather than just printing it.
+  launch(b, {
+    mode: "call",
+    onArrive: async () => {
+      try {
+        const d = await mcp("endless_call", { tool_id: b.tool_id, input: args });
+        out.innerHTML = "<pre>" + esc(JSON.stringify(d.result ?? d, null, 2)) + "</pre>";
+        b.mass = (b.mass ?? 0) + 1;
+      } catch (e) {
+        out.innerHTML = "<pre style=\"color:#e08a8a\">" + esc(e.message) + "</pre>";
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------- search
+$("#go").onclick = search;
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+
+async function search() {
+  const q = $("#q").value.trim();
+  if (!q || probe) return;
+  $("#go").disabled = true;
+  selected = null; hidePanel();
+  setStatus("asking the registry…");
+
+  let d;
+  try { d = await mcp("endless_search", { query: q, k: 5 }); }
+  catch (e) { setStatus(e.message); $("#go").disabled = false; return; }
+
+  const first = (d.results ?? [])[0];
+  const target = first ? bodies.find(b => b.tool_id === first.tool_id) : null;
+
+  // No tool, or one this map does not know yet: ride out to empty space and
+  // watch the need get written down.
+  if (d.gap_logged || !target) {
+    const a = Math.random() * TAU, r = 860 + Math.random() * 180;
+    const spot = { x: Math.cos(a) * r, y: Math.sin(a) * r };
+    setStatus("nothing here does that — flying out to record it");
+    launch(spot, {
+      mode: "gap",
+      onArrive: () => {
+        setStatus("recorded as a need nobody met");
+        gaps.push({ id: "new-" + Date.now(), label: q, confirmed: false,
+                    distinct_callers: 1, x: spot.x, y: spot.y, motes: makeMotes(30, 48) });
+        showPanel(
+          "<h2 style=\"color:var(--dust)\">Nothing here can do that</h2>" +
+          "<p class=\"sub\">" + esc(q) + "</p>" +
+          "<div class=\"gapnote\">It has been written down as a need nobody met. " +
+          "The dust out there is the record.<ul>" +
+          "<li>When enough separate people ask for the same thing, it becomes a candidate to build.</li>" +
+          "<li>One person asking repeatedly is not demand, and counts once.</li>" +
+          "</ul></div>");
+      },
+      onDone: () => { $("#go").disabled = false; },
+    });
+    return;
+  }
+
+  setStatus("found it — flying to " + (target.name ?? target.tool_id));
+  launch(target, {
+    mode: "find",
+    onArrive: () => { setStatus(""); showTool(target); },
+    onDone: () => { $("#go").disabled = false; },
+  });
+}
+
+load().then(() => {
+  setStatus(bodies.length + " worlds · " + gaps.length + " needs nobody met");
+  setTimeout(() => setStatus(""), 4500);
+});
+</script>
+</body>
+</html>

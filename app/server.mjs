@@ -103,8 +103,12 @@ const server = createServer(async (req, res) => {
     // the two would have ECS restart the task every time Bedrock was slow.
     if (url.pathname === "/health") return json(res, 200, { ok: true });
 
-    if (url.pathname === "/" || url.pathname === "/index.html") {
-      const html = await readFile(join(HERE, "public", "index.html"), "utf8");
+    // Two pages, one server. The world is the same data as the plain page —
+    // same board files, same MCP calls — drawn as somewhere you travel rather
+    // than a list you scroll. Neither is the "real" one.
+    const PAGES = { "/": "index.html", "/index.html": "index.html", "/world": "world.html" };
+    if (PAGES[url.pathname]) {
+      const html = await readFile(join(HERE, "public", PAGES[url.pathname]), "utf8");
       res.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-cache",
