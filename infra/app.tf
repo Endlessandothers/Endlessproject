@@ -79,12 +79,19 @@ resource "aws_security_group" "app" {
   description = "endless-app: HTTP in, everything out."
   vpc_id      = aws_vpc.app.id
 
+  # ONE ADDRESS, because the container now carries a key.
+  #
+  # While a visitor brought their own credential, an open port cost nothing: a
+  # stranger reaching this page got a form and no way to use it. That stopped
+  # being true the moment the app started calling on the operator's behalf. An
+  # open page holding a working key is an open relay to this account's credits,
+  # and every search behind it is an Opus 5 call billed here.
   ingress {
-    description = "The page itself."
+    description = "The page itself, from the one address that uses it."
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.app_allowed_cidr]
   }
 
   # Outbound is open because the app must reach the MCP endpoint, CloudFront and
@@ -148,12 +155,46 @@ resource "aws_iam_role_policy_attachment" "app_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# THERE IS NO TASK ROLE.
+# Reading the caller key is the EXECUTION role's job, not the app's. ECS fetches
+# the parameter and injects it as an environment variable before the container
+# starts, which is why the app still needs no AWS identity of its own and the
+# "no task role" property below survives this change.
+resource "aws_iam_role_policy" "app_execution_secret" {
+  count = var.app_key_param == "" ? 0 : 1
+
+  name = "read-the-caller-key"
+  role = aws_iam_role.app_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters"]
+        Resource = "arn:aws:ssm:${var.region}:${local.account_id}:parameter${var.app_key_param}"
+      },
+      {
+        Effect    = "Allow"
+        Action    = ["kms:Decrypt"]
+        Resource  = "*"
+        Condition = { StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" } }
+      },
+    ]
+  })
+}
+
+# THERE IS STILL NO TASK ROLE.
 #
-# Not an omission. The app holds no AWS credentials because it needs none: it
-# reaches the registry over the public MCP endpoint with the visitor's own key,
-# and reads the board from CloudFront like anyone else. A task role would be a
-# credential sitting in a public-facing container for no reason.
+# Not an omission, and it survived the app gaining a key. The container reaches
+# the registry over the public MCP endpoint and reads the board from CloudFront
+# like anyone else — neither needs AWS credentials. The one secret it now holds
+# is fetched by ECS before the container starts, so the app never calls AWS to
+# get it and needs no identity to do so.
+#
+# The distinction matters: a task role is a live credential inside a running
+# container, reachable by anything that gets code execution in there. An
+# injected secret is one string with one use, and stealing it costs an attacker
+# this registry's credits rather than this AWS account.
 
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${local.prefix}-app"
@@ -196,6 +237,16 @@ resource "aws_ecs_task_definition" "app" {
     environment = [
       { name = "MCP_URL", value = aws_lambda_function_url.mcp.function_url },
       { name = "BOARD_URL", value = "https://${aws_cloudfront_distribution.board.domain_name}/" },
+    ]
+
+    # The key arrives as a secret rather than an environment value, so the task
+    # definition records the parameter's ARN and never its contents. Anyone with
+    # ecs:DescribeTaskDefinition sees where it lives, not what it is.
+    secrets = var.app_key_param == "" ? [] : [
+      {
+        name      = "ENDLESS_API_KEY"
+        valueFrom = "arn:aws:ssm:${var.region}:${local.account_id}:parameter${var.app_key_param}"
+      },
     ]
 
     # Reports whether the container is alive, not whether the registry is

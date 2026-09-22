@@ -98,15 +98,27 @@ variable "anthropic_key_param" {
 }
 
 variable "app_image_tag" {
-  description = "Which endless-app image the Fargate task runs. Bump it after pushing a new one; a tag rather than a digest so a redeploy is one variable change."
+  description = "Which endless-app image the Fargate task runs. Bump it after pushing a new one; a tag rather than a digest so a redeploy is one variable change. Note it is NOT `latest`, deliberately — but that means pushing `latest` and forcing a new deployment changes nothing, which cost a confused half hour once. Push the new tag, then bump this."
   type        = string
-  default     = "v1"
+  default     = "v2"
 }
 
 variable "app_desired_count" {
   description = "How many app tasks run. This is the off switch: set it to 0 and the Fargate bill stops, while the VPC, the repository and the task definition all keep costing nothing. One 0.25 vCPU task is roughly $9 a month and is billed whether anyone visits or not — the first thing in this project to leave the free tier."
   type        = number
   default     = 1
+}
+
+variable "app_allowed_cidr" {
+  description = "Who may reach the app. Defaults to one address because the app now carries a key and there is one user. Set it to 0.0.0.0/0 to reopen it, but only alongside removing app_key_param — an open page holding a working key is an open door to someone else's credits and, worse, to Opus 5 calls billed to this account. Home broadband addresses move; if the page stops answering, this is the first thing to check."
+  type        = string
+  default     = "109.157.66.87/32"
+}
+
+variable "app_key_param" {
+  description = "SSM parameter NAME holding the key the app calls with. Empty string means the app holds no key and visitors bring their own, which is the arrangement the counts in this system assume. The value is written out of band and injected by ECS at task start, so it appears in neither the task definition nor Terraform state."
+  type        = string
+  default     = "/endless/app-caller-key"
 }
 
 variable "mcp_flood_threshold" {

@@ -4,22 +4,35 @@
 // with a terminal. This is the third door: a page you can open, paste a key
 // into, and use.
 //
-// THE ONE RULE THIS APP LIVES BY: IT HOLDS NO KEY.
+// IT USED TO HOLD NO KEY. NOW IT HOLDS ONE, AND THAT IS A REAL TRADE.
 //
-// It would be easier if it did. One key in an environment variable and nobody
-// has to paste anything. But then every visitor would arrive as the SAME
-// caller, and every count this system rests on — distinct callers behind a gap,
-// distinct owners behind a cluster, who is competing with whom — would silently
-// collapse to one. The registry would be unable to tell a hundred people from
-// one person a hundred times.
+// The original rule was that a visitor brings their own credential, because
+// every count this system rests on — distinct callers behind a gap, distinct
+// owners behind a cluster, who is competing with whom — is a count of separate
+// people. One shared key collapses all of them to one. The registry becomes
+// unable to tell a hundred people from one person a hundred times.
 //
-// So a visitor brings their own key. The app forwards it and keeps nothing:
-// no session, no store, no log of it. Same arrangement as mcp-fn, which
-// forwards a caller's credential rather than acting on its own behalf, and for
-// the same reason.
+// That cost is only worth paying while there IS one person, which today there
+// is. ENDLESS_API_KEY is the operator's own key, injected by ECS at task start,
+// used when a request arrives without one. So the counts stay honest — they
+// really are all one caller — and there is nothing to paste.
 //
-// It also means this container needs no AWS credentials at all. Its task role
-// grants nothing, because there is nothing for it to be granted.
+// TWO THINGS MUST BE TRUE FOR THIS TO STAY SAFE, and neither is enforced here:
+//
+//   1. The security group admits one address. A page on an open port that
+//      carries a working key is an open relay to this account's credits, and
+//      every search behind it is an Opus 5 call billed to it. See
+//      app_allowed_cidr in infra/variables.tf.
+//   2. Before anyone else uses this, the key goes away again. Unset
+//      app_key_param, reopen the CIDR, and the app is back to forwarding what
+//      a visitor brings. The page still has the key box for exactly that
+//      reason; a pasted key always wins over the built-in one.
+//
+// A visitor's own key still takes precedence, so this is a fallback rather
+// than a replacement — the multi-user path is not deleted, only unused.
+//
+// The container still holds no AWS credentials and has no task role. ECS reads
+// the parameter before the container starts; the app never calls AWS at all.
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -30,6 +43,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
 const MCP_URL = process.env.MCP_URL;
 const BOARD_URL = process.env.BOARD_URL;
+
+// Trimmed because it arrives from a parameter store, and a stray newline in a
+// credential produces a 401 that says nothing about why. Empty string when the
+// app is back to holding nothing, which is falsy and therefore the same code
+// path as before.
+const OWN_KEY = (process.env.ENDLESS_API_KEY || "").trim();
 
 if (!MCP_URL || !BOARD_URL) {
   console.error("MCP_URL and BOARD_URL are required");
@@ -97,6 +116,11 @@ const server = createServer(async (req, res) => {
       return res.end(html);
     }
 
+    // What the page needs to know before it decides whether to ask for a key.
+    // Deliberately separate from /health, which ECS reads and which should not
+    // change shape for our convenience.
+    if (url.pathname === "/api/config") return json(res, 200, { holds_key: Boolean(OWN_KEY) });
+
     // The public board. No key needed and none forwarded — it is the same
     // object anyone can fetch from CloudFront.
     if (url.pathname === "/api/board") {
@@ -114,9 +138,10 @@ const server = createServer(async (req, res) => {
       if (!ALLOWED.has(body?.name)) {
         return json(res, 400, { error: `this app only calls: ${[...ALLOWED].join(", ")}` });
       }
-      // No key, no call. Refused here so an unauthenticated click costs nothing
-      // downstream.
-      const auth = req.headers.authorization;
+      // The visitor's key first, the built-in one only as a fallback. That
+      // order is what keeps the multi-user path alive: someone who pastes a key
+      // is still counted as themselves, even while OWN_KEY is set.
+      const auth = req.headers.authorization || (OWN_KEY ? `Bearer ${OWN_KEY}` : null);
       if (!auth) return json(res, 401, { error: "paste your Endless API key first" });
 
       return json(res, 200, await callMcp(auth, body.name, body.arguments));
@@ -134,6 +159,9 @@ server.listen(PORT, () => {
   // the one place somebody reads when they are wondering where it went.
   console.log(JSON.stringify({
     msg: "endless-app listening", port: PORT, mcp: MCP_URL, board: BOARD_URL,
-    holds_key: false,
+    // Whether, never which. The key itself is never logged, and this line is
+    // the one place somebody looks when wondering why the page stopped asking
+    // for one.
+    holds_key: Boolean(OWN_KEY),
   }));
 });

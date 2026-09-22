@@ -56,12 +56,21 @@
   <p class="lede">A registry of small tools that agents search. Ask for something; if nothing can do it,
      that gets recorded as a need nobody met.</p>
 
-  <div class="key">
+  <div class="key" id="keybox" hidden>
     <label for="k">Your API key — it is sent with each request and stored only in this browser tab</label>
     <div class="row">
       <input id="k" type="password" placeholder="elk_yourname_..." autocomplete="off" spellcheck="false">
       <button class="ghost" id="forget">Forget</button>
     </div>
+  </div>
+
+  <!-- Shown instead of the key box when the server carries its own key. The
+       box is not deleted: pasting one still overrides, so the moment a second
+       person uses this, they are counted as themselves. -->
+  <div class="note" id="ownkey" hidden>
+    Signed in as this server's own caller. Every request is counted as one person —
+    which is true today and stops being true the moment somebody else opens this page.
+    <a href="#" id="usemine">Use my own key instead</a>.
   </div>
 
   <div class="tabs" role="tablist">
@@ -82,15 +91,36 @@
   <section id="tools" hidden><div class="empty">Loading…</div></section>
 
   <footer>
-    This page holds no key of its own. If it did, everyone using it would arrive as the same caller,
-    and every count the registry rests on — how many separate people needed a thing — would quietly
-    become one.
+    <span id="footkey">This page holds no key of its own. If it did, everyone using it would arrive as the
+    same caller, and every count the registry rests on — how many separate people needed a thing —
+    would quietly become one.</span>
   </footer>
 </div>
 
 <script>
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Whether this page asks for a key at all depends on whether the server has
+// one. Asked once, before anything else, so the box never flashes up and
+// vanishes.
+fetch("/api/config").then(r => r.json()).then(c => {
+  $("#keybox").hidden = Boolean(c.holds_key);
+  $("#ownkey").hidden = !c.holds_key;
+  if (c.holds_key) {
+    $("#footkey").textContent = "This page is carrying one key, for one user. The counts underneath — how many "
+      + "separate people needed a thing — are only meaningful while that stays true.";
+  }
+}).catch(() => { $("#keybox").hidden = false; });
+
+// Reveals the box on a page that did not need it. A pasted key wins over the
+// server's own, so this is how a second person arrives as themselves.
+$("#usemine").onclick = (e) => {
+  e.preventDefault();
+  $("#keybox").hidden = false;
+  $("#ownkey").hidden = true;
+  $("#k").focus();
+};
 
 // sessionStorage, not localStorage: the key goes when the tab does.
 const keyInput = $("#k");
