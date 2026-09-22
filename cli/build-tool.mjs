@@ -28,12 +28,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import Anthropic from "@anthropic-ai/sdk";
 import { duplicateCheck, brief, validateGenerated, novelHosts } from "../infra/lambda/registry/builder.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REGION = process.env.AWS_REGION || "us-east-1";
 const PREFIX = process.env.ENDLESS_PREFIX || "endless-p0";
-const MODEL = process.env.ENDLESS_BUILDER_MODEL || "amazon.nova-pro-v1:0";
+// The builder writes code, which is the one job here worth the best model.
+//
+// Read from .env so the key stays in a file git refuses to track. Everything
+// else in this project authenticates with IAM and stores no secret at all; this
+// is the single exception, and it lives on a developer's machine rather than in
+// any deployed component.
+try { process.loadEnvFile(join(HERE, "../.env")); } catch { /* not required */ }
+const MODEL = process.env.ENDLESS_BUILDER_MODEL || process.env.ANTHROPIC_MODEL || "claude-opus-5";
 const OUT_DIR = join(HERE, "../tools/generated");
 
 const C = {
@@ -90,18 +98,57 @@ function askRegistry(query) {
   return { query, tool_id: body.fits ?? null };
 }
 
-function bedrock(prompt) {
-  const p = join(tmpdir(), `br-${Date.now()}.json`);
-  writeFileSync(p, JSON.stringify({
-    messages: [{ role: "user", content: [{ text: prompt }] }],
-    inferenceConfig: { temperature: 0.2, maxTokens: 3000 },
-  }));
-  const out = join(tmpdir(), `br-${Date.now()}.out`);
-  execFileSync("aws", ["bedrock-runtime", "invoke-model", "--region", REGION,
-    "--model-id", MODEL, "--content-type", "application/json",
-    "--cli-binary-format", "raw-in-base64-out", "--body", `file://${p}`, out], { stdio: "pipe" });
-  const res = JSON.parse(readFileSync(out, "utf8"));
-  return res.output?.message?.content?.[0]?.text ?? "";
+const anthropic = new Anthropic();
+
+// The package shape is enforced by the API rather than hoped for.
+//
+// The first version asked for JSON in the prompt and parsed whatever came back,
+// which failed on the very first run — "the model did not return usable JSON".
+// A schema the server validates against removes that failure mode entirely, so
+// every discard after this point is about the tool being wrong rather than the
+// reply being malformed.
+const PACKAGE_SCHEMA = {
+  type: "json_schema",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["tool_id", "name", "description", "category", "input", "allowlist", "requests", "handler_source", "sample"],
+    properties: {
+      tool_id: { type: "string", description: "kebab-case id" },
+      name: { type: "string" },
+      description: { type: "string", description: "What it does and returns, in plain language. Describe what it DOES, never what it does not do." },
+      category: { type: "string" },
+      input: { type: "object", description: "field -> {type, required, description}" },
+      allowlist: { type: "array", items: { type: "string" }, description: "every host in requests, and nothing else" },
+      requests: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "method", "url"],
+          properties: { id: { type: "string" }, method: { type: "string" }, url: { type: "string" } },
+        },
+      },
+      handler_source: { type: "string" },
+      sample: { type: "object" },
+      refuse: { type: ["string", "null"], description: "If you cannot name a real free keyless HTTPS API you are certain exists, put the reason here and leave the rest minimal." },
+    },
+  },
+};
+
+async function generate(prompt) {
+  // Streaming because a 128K-capable model writing code can run long enough to
+  // trip an HTTP timeout on a plain request.
+  const stream = anthropic.messages.stream({
+    model: MODEL,
+    max_tokens: 8000,
+    thinking: { type: "adaptive" },
+    output_config: { format: PACKAGE_SCHEMA },
+    messages: [{ role: "user", content: prompt }],
+  });
+  const res = await stream.finalMessage();
+  const text = res.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  return { text, usage: res.usage };
 }
 
 const PROMPT = (b) => `You are writing a small tool for a registry of tools that AI agents search.
@@ -127,19 +174,12 @@ HARD CONSTRAINTS. A tool that breaks any of these is discarded unread:
 - At most 2 requests. Runtime is always "lambda-vpc".
 - The handler exports exactly: export function transform({ input, responses })
 
-Reply with ONLY a JSON object, no prose and no code fences:
+The response shape is enforced by a schema, so write the content and not the
+formatting. Two things the schema cannot check and a reviewer will:
 
-{
-  "tool_id": "kebab-case-id",
-  "name": "Short Human Name",
-  "description": "What it does and what it returns, in plain language. Describe what it DOES, never what it does not do.",
-  "category": "one word",
-  "input": { "field": { "type": "string|number", "required": true, "description": "..." } },
-  "allowlist": ["api.example.com"],
-  "requests": [{ "id": "a", "method": "GET", "url": "https://api.example.com/x?q={field}" }],
-  "handler_source": "export function transform({ input, responses }) { ... }",
-  "sample": { "field": "value" }
-}`;
+- allowlist must contain every host your requests use, and nothing else
+- sample must be arguments the tool genuinely works for, because the platform
+  runs your tool against them before any person reads it`;
 
 // ---------------------------------------------------------------- open needs
 // --simulated reads the simulation's own snapshot instead of the public board.
@@ -241,14 +281,20 @@ console.log(`\n     ${C.green("no existing tool covers this")} ${C.dim(`(${dup.p
 
 // ---------------------------------------------------------------- step 2
 console.log(C.bold(`  2. generating against the cluster  ${C.dim(MODEL)}\n`));
-let pkg;
+let pkg, usage;
 try {
-  const raw = bedrock(PROMPT(b)).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-  pkg = JSON.parse(raw);
+  const out = await generate(PROMPT(b));
+  pkg = JSON.parse(out.text);
+  usage = out.usage;
 } catch (err) {
-  console.error(C.red(`  the model did not return usable JSON: ${err.message}`));
+  console.error(C.red(`  generation failed: ${err.message}`));
   process.exit(1);
 }
+
+// Logged rather than discarded. The Phase 3 findings had to quote the cost of
+// generation as an ESTIMATE because the previous builder threw this away — the
+// same mistake Phase 1 corrected for search once the tokens were counted.
+console.log(C.dim(`  ${usage.input_tokens} in, ${usage.output_tokens} out`));
 
 if (pkg.refuse) {
   // A builder that declines because it cannot name a real endpoint is behaving

@@ -1,0 +1,9 @@
+{
+  "name": "endless",
+  "private": true,
+  "type": "module",
+  "description": "Tooling for the Endless registry. The Lambdas deliberately have no dependencies; this is for the CLI only.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  }
+}

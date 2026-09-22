@@ -134,6 +134,37 @@ you. Throttled invocations are not billed. It does not undo itself —
 `terraform output mcp_restore_command` gives the one command to restore, and it
 is meant to be run after looking at why it fired.
 
+## The one Lambda with dependencies
+
+`search-fn` runs the gap adjudicator on Claude, and an Anthropic key cannot be
+granted through IAM the way a Bedrock model could. So it needs the SDK, and
+`node_modules` is not committed:
+
+```bash
+npm ci --omit=dev --prefix infra/lambda/search   # before any plan or apply
+```
+
+CI does this before `terraform init`. Skipping it locally produces a zip built
+from source alone, and the function deploys **missing its SDK** — a runtime
+failure no plan reveals, because a plan only sees a different hash.
+
+### And the one stored credential
+
+Everything else here authenticates with IAM and stores no secret: CI assumes a
+role through OIDC, the functions carry roles, the callers table holds only
+hashes. That property is now broken on purpose.
+
+The key lives in SSM Parameter Store as a SecureString, written out of band:
+
+```bash
+aws ssm put-parameter --name /endless/anthropic-api-key   --type SecureString --value sk-ant-... --overwrite
+```
+
+Not a Lambda environment variable (readable by anyone with
+`lambda:GetFunctionConfiguration`) and not a Terraform variable (it would land
+in the state file). Terraform knows the parameter's **name** and never its
+value. One role may read it, and only that parameter.
+
 ## The review gate
 
 Publishing a tool and being allowed to RUN it are two different events.

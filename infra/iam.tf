@@ -150,12 +150,32 @@ data "aws_iam_policy_document" "search" {
     resources = [local.embed_model_arn]
   }
 
-  # The gap adjudicator. Scoped to the one model it is allowed to call, so a
-  # code change cannot quietly start invoking something larger and pricier.
+  # The gap adjudicator no longer runs on Bedrock, so there is no model ARN to
+  # scope here. It runs on Claude through the Anthropic API, and an Anthropic
+  # key cannot be granted through IAM the way a Bedrock model could — which is
+  # the whole reason this project now has a stored credential at all.
+  #
+  # What IAM can still do is control who reads the key. This is the only role
+  # that may, and only this one parameter.
   statement {
-    sid       = "AdjudicateGaps"
-    actions   = ["bedrock:InvokeModel"]
-    resources = [local.judge_model_arn]
+    sid       = "ReadTheAnthropicKey"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.region}:${local.account_id}:parameter${var.anthropic_key_param}"]
+  }
+
+  # SecureString parameters are encrypted with the default SSM key, and reading
+  # one needs decrypt on that key. Scoped by the ViaService condition so this
+  # grant cannot be used to decrypt anything else in the account.
+  statement {
+    sid       = "DecryptThatParameter"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.region}.amazonaws.com"]
+    }
   }
 
   statement {

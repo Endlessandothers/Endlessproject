@@ -11,7 +11,9 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 import { randomUUID } from "node:crypto";
 import { packVector, unpackVector, cosine } from "./vector.mjs";
 import { buildIndex, bm25, saturate, fuse } from "./lexical.mjs";
-import { buildBody, parseVerdict, extractText, extractUsage } from "./judge.mjs";
+import Anthropic from "@anthropic-ai/sdk";
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
+import { buildRequest, parseVerdict, extractText, extractUsage } from "./judge.mjs";
 import { authenticate, provenanceOf } from "./auth.mjs";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -27,6 +29,8 @@ const THRESHOLD_T = Number(process.env.THRESHOLD_T || 0.5);
 // 1 = pure cosine, 0 = pure lexical.
 const FUSION_ALPHA = Number(process.env.FUSION_ALPHA ?? 1);
 const JUDGE_MODEL_ID = process.env.JUDGE_MODEL_ID || "";
+const KEY_PARAM = process.env.ANTHROPIC_KEY_PARAM || "";
+const JUDGE_TIMEOUT_MS = Number(process.env.JUDGE_TIMEOUT_MS || 12000);
 const JUDGE_CANDIDATES = Number(process.env.JUDGE_CANDIDATES || 3);
 
 // Cache survives warm invocations. This is what makes brute force viable.
@@ -132,20 +136,53 @@ async function rankTools(queryVector, queryText, k) {
 // Fails OPEN, deliberately: if the model errors, times out or returns something
 // unparseable, fall back to the threshold rather than dropping the gap decision
 // entirely. A Bedrock outage should degrade gap quality, not break search.
+// The key, read once per execution environment from SSM Parameter Store.
+//
+// NOT a Lambda environment variable, and not a Terraform variable. An env var is
+// readable by anyone with lambda:GetFunctionConfiguration, and a Terraform
+// variable would put the key in the state file. A SecureString parameter keeps
+// it out of both, and out of git.
+//
+// This is the first stored credential in the project. Everything else
+// authenticates with IAM and stores nothing — the CI role assumes through OIDC,
+// the functions carry roles, the callers table holds only hashes. That property
+// is now broken on purpose, and it is worth knowing it was a trade rather than
+// an oversight: an Anthropic key cannot be granted through IAM.
+const ssm = new SSMClient({});
+let anthropic = null;
+
+async function judge() {
+  if (anthropic) return anthropic;
+  const out = await ssm.send(new GetParameterCommand({ Name: KEY_PARAM, WithDecryption: true }));
+  // maxRetries 1, not the default 2. The judge already fails open to the
+  // threshold, so a third attempt buys a slightly better answer at the cost of
+  // the whole search taking longer than the function is allowed to live.
+  anthropic = new Anthropic({ apiKey: out.Parameter.Value, maxRetries: 1 });
+  return anthropic;
+}
+
 async function adjudicate(query, results) {
   if (!JUDGE_MODEL_ID) return { used: false };
   const candidates = results.slice(0, JUDGE_CANDIDATES);
   if (candidates.length === 0) return { used: false };
   try {
-    const res = await bedrock.send(new InvokeModelCommand({
-      modelId: JUDGE_MODEL_ID,
-      contentType: "application/json",
-      accept: "application/json",
-      body: JSON.stringify(buildBody(query, candidates)),
-    }));
-    const parsed = JSON.parse(new TextDecoder().decode(res.body));
-    const verdict = parseVerdict(extractText(parsed), candidates.map((c) => c.tool_id));
-    const usage = extractUsage(parsed);
+    const client = await judge();
+    // A BUDGET SHORTER THAN THE FUNCTION'S OWN TIMEOUT.
+    //
+    // search-fn lives 30 seconds. An Opus 5 judge occasionally takes longer
+    // than that, and when it did the whole search died — returning nothing at
+    // all, rather than the ranked results it already had in hand.
+    //
+    // That was the fail-open not firing: it catches errors, and a Lambda being
+    // killed is not an error the Lambda gets to catch. With a client budget of
+    // 12s and one retry, the worst case stays inside 30s and a slow judge
+    // degrades to the threshold exactly as a broken one does.
+    const message = await client.messages.create(
+      buildRequest(query, candidates, { model: JUDGE_MODEL_ID }),
+      { timeout: JUDGE_TIMEOUT_MS },
+    );
+    const verdict = parseVerdict(extractText(message), candidates.map((c) => c.tool_id));
+    const usage = extractUsage(message);
     console.log(JSON.stringify({ metric: "judge_tokens", ...usage, verdict: verdict.reason }));
     if (!verdict.ok) return { used: false, error: verdict.reason };
     return { used: true, tool_id: verdict.tool_id };

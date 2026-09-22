@@ -1,0 +1,10 @@
+{
+  "name": "endless-search",
+  "private": true,
+  "type": "module",
+  "description": "search-fn. The only Lambda with dependencies: the gap adjudicator runs on Claude, and an Anthropic key cannot be granted through IAM the way Bedrock could.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "@aws-sdk/client-ssm": "^3.900.0"
+  }
+}

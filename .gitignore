@@ -10,3 +10,9 @@ node_modules/
 sim/.keys-*.json
 sim/run-log.json
 tools/generated/
+
+# Credentials. Never committed — this repo has otherwise had no stored secrets
+# at all, and an API key in git history cannot be taken back out.
+.env
+.env.*
+!.env.example

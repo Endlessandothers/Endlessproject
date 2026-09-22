@@ -85,6 +85,18 @@ variable "cluster_schedule" {
   default     = "cron(15 3 * * ? *)"
 }
 
+variable "judge_timeout_ms" {
+  description = "How long search-fn waits for the adjudicator before giving up and using the threshold. Must stay well under the function's own 30s timeout: a Lambda killed by its timeout cannot run its own fail-open, so a slow judge would take the whole search down rather than degrading it. 12s with one retry keeps the worst case inside 30."
+  type        = number
+  default     = 12000
+}
+
+variable "anthropic_key_param" {
+  description = "SSM Parameter Store path holding the Anthropic API key, as a SecureString. The NAME only — Terraform never sees the value, so it never enters the state file. Written out of band: aws ssm put-parameter --name /endless/anthropic-api-key --type SecureString --value sk-ant-... --overwrite"
+  type        = string
+  default     = "/endless/anthropic-api-key"
+}
+
 variable "app_image_tag" {
   description = "Which endless-app image the Fargate task runs. Bump it after pushing a new one; a tag rather than a digest so a redeploy is one variable change."
   type        = string
@@ -215,21 +227,9 @@ variable "fusion_alpha" {
 }
 
 variable "judge_model_id" {
-  description = <<-EOT
-    Small model that decides whether anything in the shortlist actually does the
-    job. Set to "" to disable and fall back to the threshold alone.
-
-    An absolute threshold could not make this call: on a held-out set it logged
-    31.6% of answerable queries as gaps, because correct-hit scores ran 0.21 and
-    up on one set and as low as 0.12 on the next. Retrieval was never the
-    problem — recall@3 was 100% on both sets, and in every false gap the right
-    tool was already in the top three.
-
-    So the ranking is untouched and only the yes/no changed. This is the
-    "mini LLM at the edge" from PROJECT.md.
-  EOT
+  description = "The model that decides whether any candidate tool genuinely does the job. Runs on EVERY search, at about 207 input and 8 output tokens. On Nova Micro that was roughly $8 per million searches; on Claude Opus 5 it is roughly $1,240 per million, and the judge stops being the largest line item and becomes essentially the whole bill. Chosen anyway because Phase 3 measured the cheap judge FALSELY MATCHING — accepting a currency converter for a question about capitals — which suppresses a real need rather than merely wasting effort."
   type        = string
-  default     = "amazon.nova-micro-v1:0"
+  default     = "claude-opus-5"
 }
 
 variable "judge_candidates" {
