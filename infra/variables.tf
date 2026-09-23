@@ -115,6 +115,12 @@ variable "answer_model_id" {
   default     = "claude-opus-5"
 }
 
+variable "answer_expensive_tokens" {
+  description = "Output tokens past which answering WITHOUT a tool is recorded as a gap anyway. A model that answers correctly but expensively has revealed a tool-shaped hole: a tool exists to make a repeated expensive thing cheap. Output rather than input, because input is the question plus a few tool descriptions and barely moves, while output carries the thinking — which is where an expensive answer actually spends. These gaps carry reason=answered_but_expensive, so a reader can tell them from the ones nobody could answer at all; they are different arguments for building something."
+  type        = number
+  default     = 1200
+}
+
 variable "answer_timeout_ms" {
   description = "Request timeout on each model call in answer-fn. Two of these plus a 30s tool run must stay inside the function's 90s timeout, because the fail-soft path cannot run when the Lambda itself is killed — which is how the judge once returned no body at all."
   type        = number

@@ -5,6 +5,8 @@
   "description": "answer-fn. Turns a question into an answer: reads it into the chosen tool's arguments, runs it, and says what came back. Carries the Anthropic SDK for the same reason search-fn does.",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
-    "@aws-sdk/client-ssm": "^3.900.0"
+    "@aws-sdk/client-dynamodb": "^3.1138.0",
+    "@aws-sdk/client-ssm": "^3.900.0",
+    "@aws-sdk/lib-dynamodb": "^3.1138.0"
   }
 }

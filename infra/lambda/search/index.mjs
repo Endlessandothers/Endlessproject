@@ -295,7 +295,42 @@ export const handler = async (event) => {
     // a gap.
     const isBuilder = provenance.role === "builder";
 
+    // DEFERRED GAPS — for a caller that knows something this function does not.
+    //
+    // "No tool fits" was the whole definition of an unmet need, and it is too
+    // broad. A model that answers "what is the capital of France" perfectly
+    // well, instantly and for a fraction of a cent, has not revealed a hole in
+    // the registry; it has revealed a question that never needed a tool. Under
+    // the old rule that logged a gap, and the gap log is the one artefact here
+    // that has to stay meaningful.
+    //
+    // So answer-fn can ask for the verdict WITHOUT the consequence, decide
+    // whether the need is real once it knows what answering actually cost, and
+    // write the gap itself. This function still owns the judgement about which
+    // tool fits; it no longer owns the judgement about whether that matters.
+    const deferGap = body.defer_gap === true;
+
     let gap_id = null;
+    if (deferGap && (isGap || rejected) && !isBuilder) {
+      return json(200, {
+        query, results, threshold_t: THRESHOLD_T, fusion_alpha: FUSION_ALPHA,
+        decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
+        judge_error: verdict.error ?? null,
+        fits: verdict.used ? verdict.tool_id : (top >= THRESHOLD_T ? results[0]?.tool_id ?? null : null),
+        gap_logged: false,
+        // Everything needed to write the gap later, including the vector, which
+        // was already computed here. Re-embedding it downstream would be a
+        // second bill for the same work.
+        deferred_gap: {
+          query, ts, day, ...provenance,
+          vec_b64: packVector(vector), vec_dims: vector.length,
+          reason: rejected ? "rejected" : (verdict.used ? "judged_no_fit" : "below_threshold"),
+          decided_by: verdict.used ? JUDGE_MODEL_ID : "threshold",
+          threshold_t: THRESHOLD_T, top_k: results, embed_model: MODEL,
+        },
+      });
+    }
+
     if ((isGap || rejected) && !isBuilder) {
       gap_id = randomUUID();
       await ddb.send(new PutCommand({

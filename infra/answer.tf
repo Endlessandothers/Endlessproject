@@ -64,18 +64,39 @@ data "aws_iam_policy_document" "answer" {
     }
   }
 
+  # WRITE-ONLY, ON ONE TABLE.
+  #
+  # This function decides whether a question was a real unmet need, so it has to
+  # be able to record one. It deliberately cannot READ the gaps: nothing here
+  # needs to, and a function reachable from a public page that could enumerate
+  # what people have asked for is a privacy problem rather than a feature.
+  #
+  # search-fn still writes gaps too. The difference is that it writes them when
+  # no tool fits, while this writes them when nothing could ANSWER — which after
+  # this change is the narrower and more honest claim.
+  statement {
+    sid       = "RecordAnUnmetNeed"
+    actions   = ["dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.gaps.arn]
+  }
+
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.answer.arn}:*"]
   }
 
-  # Explicit, because this function talks to a model and the cost of a mistake
-  # here is measured in money rather than in a failed request.
+  # Explicit, because this function talks to a model and is reachable from a
+  # public page. The allow above is one action on one table; everything else
+  # about the data layer stays shut whatever a future edit adds.
   statement {
-    sid       = "NeverTheTablesDirectly"
-    effect    = "Deny"
-    actions   = ["dynamodb:*", "s3:*", "bedrock:*"]
+    sid    = "NeverReadTheRegistryDirectly"
+    effect = "Deny"
+    actions = [
+      "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan",
+      "dynamodb:DeleteItem", "dynamodb:UpdateItem", "dynamodb:BatchGetItem",
+      "s3:*", "bedrock:*",
+    ]
     resources = ["*"]
   }
 }
@@ -113,11 +134,13 @@ resource "aws_lambda_function" "answer" {
 
   environment {
     variables = {
-      SEARCH_FN           = aws_lambda_function.search.function_name
-      EXEC_FN             = aws_lambda_function.exec.function_name
-      ANTHROPIC_KEY_PARAM = var.anthropic_key_param
-      ANSWER_MODEL_ID     = var.answer_model_id
-      ANSWER_TIMEOUT_MS   = tostring(var.answer_timeout_ms)
+      SEARCH_FN               = aws_lambda_function.search.function_name
+      EXEC_FN                 = aws_lambda_function.exec.function_name
+      ANTHROPIC_KEY_PARAM     = var.anthropic_key_param
+      ANSWER_MODEL_ID         = var.answer_model_id
+      ANSWER_TIMEOUT_MS       = tostring(var.answer_timeout_ms)
+      GAPS_TABLE              = aws_dynamodb_table.gaps.name
+      ANSWER_EXPENSIVE_TOKENS = tostring(var.answer_expensive_tokens)
     }
   }
 

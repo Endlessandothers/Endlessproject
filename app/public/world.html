@@ -100,6 +100,7 @@
 </div>
 
 <div class="legend" id="legend">
+  <div><i style="background:#ffb347;box-shadow:0 0 12px #ED7100"></i> the centre — Claude, which answers most things itself</div>
   <div><i style="background:#ED7100;box-shadow:0 0 10px #ED7100"></i> lit — called, and it worked</div>
   <div><i style="background:#3a3a4a"></i> unlit — never called, so nothing is known</div>
   <div><i style="background:#c98a3a;opacity:.6"></i> dust — a need nobody met</div>
@@ -147,6 +148,7 @@ const home = { x: 0, y: 0 };
 const dust = [];   // transient particles: a record being written
 let probe = null;  // the ride
 let hovered = null, selected = null;
+let homePulse = 0;   // the centre flaring when it answers on its own
 
 const world = (sx, sy) => ({ x: (sx - W/2)/cam.z + cam.x, y: (sy - H/2)/cam.z + cam.y });
 const screenOf = (p) => ({ x: (p.x - cam.x) * cam.z + W/2, y: (p.y - cam.y) * cam.z + H/2 });
@@ -246,6 +248,7 @@ function step(dt) {
     if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - dt / 900);
   }
   for (const g of gaps) for (const m of g.motes) m.a += m.rate * dt;
+  if (homePulse > 0) homePulse = Math.max(0, homePulse - dt / 1400);
 
   for (let i = dust.length - 1; i >= 0; i--) {
     const d = dust[i];
@@ -342,18 +345,39 @@ function draw(now) {
     }
   }
 
-  // Home: where a request leaves from.
+  // THE MODEL, AT THE CENTRE. Everything else orbits it.
+  //
+  // It used to be a small ring labelled "you" — a departure point, because every
+  // question left here to find a tool. That is no longer what happens. Most
+  // questions are answered right here and never go anywhere, so the centre is
+  // drawn as the largest and brightest thing on the map, and it flares when it
+  // answers on its own.
   const hs = screenOf(home);
-  ctx.strokeStyle = "rgba(140,150,190,.5)"; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, 15 * cam.z, 0, TAU); ctx.stroke();
-  ctx.globalAlpha = .45 + .25 * Math.sin(now * .002);
-  ctx.fillStyle = "#aab3d8";
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, 6.5 * cam.z, 0, TAU); ctx.fill();
-  ctx.globalAlpha = 1;
-  if (cam.z > .7) {
-    ctx.font = (10 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
-    ctx.fillStyle = "rgba(160,168,200,.7)";
-    ctx.fillText("you", hs.x, hs.y + 30 * cam.z);
+  const R0 = 26 * cam.z;
+  const beat = 1 + .04 * Math.sin(now * .0016) + homePulse * .5;
+
+  const corona = ctx.createRadialGradient(hs.x, hs.y, R0 * .4, hs.x, hs.y, R0 * (3.4 * beat));
+  corona.addColorStop(0, `rgba(237,113,0,${.30 + homePulse * .45})`);
+  corona.addColorStop(.45, `rgba(237,113,0,${.09 + homePulse * .2})`);
+  corona.addColorStop(1, "rgba(237,113,0,0)");
+  ctx.fillStyle = corona;
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, R0 * 3.4 * beat, 0, TAU); ctx.fill();
+
+  const core = ctx.createRadialGradient(
+    hs.x - R0 * .25, hs.y - R0 * .3, R0 * .1, hs.x, hs.y, R0 * beat);
+  core.addColorStop(0, "#fff3e2");
+  core.addColorStop(.5, "#ffb347");
+  core.addColorStop(1, "#ED7100");
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, R0 * beat, 0, TAU); ctx.fill();
+
+  if (cam.z > .55) {
+    ctx.font = (11.5 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillStyle = "rgba(255,210,160,.95)";
+    ctx.fillText("Claude", hs.x, hs.y + R0 * 1.9);
+    ctx.font = (9.5 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillStyle = "rgba(160,150,150,.75)";
+    ctx.fillText("answers what it can", hs.x, hs.y + R0 * 1.9 + 14 * cam.z);
   }
 
   // The worlds.
@@ -638,20 +662,33 @@ async function search() {
   selected = null; hidePanel();
   setStatus("thinking…");
 
-  // ONE CALL, NOT THREE. The page used to search, hand back a tool, and ask the
-  // person to fill in its arguments — which is the right interface for an agent
-  // composing a capability and the wrong one for someone who asked a question.
-  // endless_answer finds the tool, reads the question into its arguments, runs
-  // it and writes the reply. The ride happens after, because by then we know
-  // where we are going.
+  // ONE CALL, AND IT MAY NOT INVOLVE A TOOL AT ALL. The page used to search,
+  // hand back a tool, and ask the person to fill in its arguments — the right
+  // interface for an agent composing a capability, the wrong one for someone
+  // who asked a question. endless_answer decides whether a tool is even needed,
+  // and the ride happens after, because only then do we know where we are going
+  // or whether we are going anywhere.
   let d;
   try { d = await mcp("endless_answer", { question: q }); }
   catch (e) { setStatus(e.message); $("#go").disabled = false; return; }
 
+  // 1. ANSWERED WITHOUT LEAVING. No flight, because nothing was fetched — the
+  // centre flares and that is the whole journey. Drawing a ride here would be a
+  // lie about where the answer came from, and showing the mechanism is the only
+  // reason this map exists.
+  if (d.answered_by === "model") {
+    homePulse = 1;
+    cam.tx = 0; cam.ty = 0; cam.tz = 1.35;
+    setStatus(d.gap_logged ? "answered without a tool — but expensively" : "answered without a tool");
+    showAnswer(q, d, null);
+    $("#go").disabled = false;
+    setTimeout(() => setStatus(""), 3200);
+    return;
+  }
+
   const target = d.tool_id ? bodies.find((b) => b.tool_id === d.tool_id) : null;
 
-  // Nothing fits, or it fits something this map has never heard of: ride out
-  // past the rim and watch the need get written down.
+  // 3. NOBODY COULD. Ride out past the rim and watch the need get written down.
   if (!target) {
     const a = Math.random() * TAU, r = 860 + Math.random() * 180;
     const spot = { x: Math.cos(a) * r, y: Math.sin(a) * r };
@@ -660,12 +697,12 @@ async function search() {
       mode: "gap",
       onArrive: () => {
         setStatus("recorded as a need nobody met");
-        gaps.push({ id: "new-" + Date.now(), label: q, confirmed: false,
+        gaps.push({ id: "new-" + Date.now(), label: d.need ?? q, confirmed: false,
                     distinct_callers: 1, x: spot.x, y: spot.y, motes: makeMotes(30, 48) });
         showPanel(
           "<h2 style=\"color:var(--dust)\">Nothing here can do that</h2>" +
           "<p class=\"sub\">" + esc(q) + "</p>" +
-          "<div class=\"gapnote\">" + esc(d.answer ?? "It has been recorded as a need nobody met.") +
+          "<div class=\"gapnote\">" + esc(d.answer ?? "Recorded as a need nobody met.") +
           "<ul><li>When enough separate people ask for the same thing, it becomes a candidate to build.</li>" +
           "<li>One person asking repeatedly is not demand, and counts once.</li></ul></div>");
       },
@@ -674,6 +711,7 @@ async function search() {
     return;
   }
 
+  // 2. A TOOL DID IT. Fly there, and land with the answer.
   setStatus("asking " + (target.name ?? target.tool_id));
   launch(target, {
     mode: "find",
@@ -687,22 +725,28 @@ async function search() {
 // enough to be checkable, quiet enough not to be the point.
 function showAnswer(question, d, b) {
   selected = b;
+  const via = d.answered_by === "model"
+    // Said plainly. "No tool was used" and "no tool exists" are different facts,
+    // and the old page conflated them by only ever naming a tool.
+    ? "answered by <b>Claude</b>, no tool needed" +
+      (d.gap_logged ? " — but expensively, so it is recorded as a tool worth having" : "")
+    : "answered by <b>" + esc(d.tool_name ?? d.tool_id) + "</b>" + (d.ms ? " · " + esc(d.ms) + "ms" : "");
   showPanel(
     "<p class=\"sub\" style=\"margin-bottom:8px\">" + esc(question) + "</p>" +
     "<p class=\"answer\">" + esc(d.answer ?? "") + "</p>" +
-    "<p class=\"via\">answered by <b>" + esc(d.tool_name ?? d.tool_id) + "</b>" +
-      (d.ms ? " · " + esc(d.ms) + "ms" : "") + "</p>" +
+    "<p class=\"via\">" + via + "</p>" +
     (d.error ? "<div class=\"gapnote\">" + esc(d.error) + "</div>" : "") +
     (d.result != null
       ? "<details><summary>what it actually ran, and what came back</summary>" +
         "<pre>" + esc(JSON.stringify({ input: d.input, result: d.result }, null, 2)) + "</pre></details>"
       : "") +
-    "<div class=\"row\"><button class=\"ghost\" id=\"manual\">Drive it yourself</button>" +
+    "<div class=\"row\">" +
+    (b ? "<button class=\"ghost\" id=\"manual\">Drive it yourself</button>" : "") +
     "<button class=\"ghost\" id=\"close\">Close</button></div><div id=\"slot\"></div>");
   $("#close").onclick = () => { selected = null; hidePanel(); };
   // The form is not gone, only no longer the first thing. An agent composing
   // this tool, or a person who wants a different argument, still needs it.
-  $("#manual").onclick = () => showTool(b);
+  if (b) $("#manual").onclick = () => showTool(b);
 }
 
 load().then(() => {
