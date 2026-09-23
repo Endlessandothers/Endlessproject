@@ -100,11 +100,12 @@
 </div>
 
 <div class="legend" id="legend">
-  <div><i style="background:#ffb347;box-shadow:0 0 12px #ED7100"></i> the centre — Claude, which answers most things itself</div>
+  <div><i style="background:#000;border:1px solid #ffc06a;box-shadow:0 0 12px #ED7100"></i> the centre — Claude. Questions fall in; only what it cannot answer comes back out</div>
   <div><i style="background:#ED7100;box-shadow:0 0 10px #ED7100"></i> lit — called, and it worked</div>
   <div><i style="background:#3a3a4a"></i> unlit — never called, so nothing is known</div>
   <div><i style="background:#c98a3a;opacity:.6"></i> dust — a need nobody met</div>
   <div style="opacity:.7;margin-top:4px">size is use · moons are tools built on it</div>
+  <div style="opacity:.7">used tools orbit close and fast · unused ones drift out and slow</div>
 </div>
 
 <div class="panel" id="panel"></div>
@@ -150,6 +151,23 @@ let probe = null;  // the ride
 let hovered = null, selected = null;
 let homePulse = 0;   // the centre flaring when it answers on its own
 
+// THE ACCRETION DISC. Matter that fell in and has not finished falling.
+//
+// Flattened rather than circular because a disc seen from slightly above is
+// what makes the shape read as a black hole rather than as a ring, and the
+// inner edge is brighter because it is moving faster and is closer to the
+// horizon. Doppler asymmetry — one side brighter than the other — is what sells
+// it; a symmetric disc looks like a logo.
+const disc = Array.from({ length: 190 }, () => {
+  const r = 32 + Math.pow(Math.random(), .62) * 50;
+  return {
+    a: Math.random() * TAU, r,
+    rate: 0.055 / Math.pow(r / 32, 1.5),   // Keplerian: the inner edge tears round
+    w: .5 + Math.random() * .8,
+    ph: Math.random() * TAU,
+  };
+});
+
 const world = (sx, sy) => ({ x: (sx - W/2)/cam.z + cam.x, y: (sy - H/2)/cam.z + cam.y });
 const screenOf = (p) => ({ x: (p.x - cam.x) * cam.z + W/2, y: (p.y - cam.y) * cam.z + H/2 });
 
@@ -181,7 +199,18 @@ async function load() {
     const r = lerp(190, 700, Math.pow(1 - busy, .85)) * jitter;
     const lit = t.brightness != null && (t.mass ?? 0) > 0;
     return {
-      ...t, x: Math.cos(a) * r, y: Math.sin(a) * r,
+      ...t,
+      // EVERYTHING ORBITS, AND KEPLER DOES THE ARGUING.
+      //
+      // Orbital speed falls off as r^-1.5, so a tool that is used sits close in
+      // and visibly swings round, while one nothing has called drifts far out
+      // and is nearly still. That is not decoration layered on top of the data:
+      // radius already encodes use, and decay already pushes an unused tool
+      // outward, so the orbit it ends up in IS its standing. A busy tool looks
+      // alive because it is.
+      orbitR: r, orbitA: a,
+      orbitRate: 110 / Math.pow(r, 1.5),
+      x: Math.cos(a) * r, y: Math.sin(a) * r,
       radius: 10 + Math.sqrt(t.live_mass ?? 0) * 7,
       hue: (h >> 3) % 360, lit, glow: lit ? t.brightness : 0,
       spin: ((h >> 5) % 100) / 100 * TAU, spinRate: .00018 + ((h >> 11) % 60) / 900000,
@@ -274,9 +303,13 @@ function step(dt) {
 
   for (const b of bodies) {
     b.spin += b.spinRate * dt;
+    b.orbitA += b.orbitRate * dt / 1000;
+    b.x = Math.cos(b.orbitA) * b.orbitR;
+    b.y = Math.sin(b.orbitA) * b.orbitR;
     for (const m of b.moons) m.a += m.rate * dt;
     if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - dt / 900);
   }
+  for (const d of disc) d.a += d.rate * dt / 1000;
   for (const g of gaps) for (const m of g.motes) m.a += m.rate * dt;
   if (homePulse > 0) homePulse = Math.max(0, homePulse - dt / 1400);
 
@@ -290,6 +323,13 @@ function step(dt) {
 
   if (!probe) return;
   const p = probe;
+  // The destination moves now. Over a two-second flight the drift is small, but
+  // arriving where a tool USED to be is the kind of wrongness this map exists
+  // not to have.
+  if (p.target && p.target.orbitR !== undefined && p.phase !== "home") {
+    p.to.x = p.target.x; p.to.y = p.target.y;
+    if (p.phase === "arrive") { cam.tx = p.target.x; cam.ty = p.target.y; }
+  }
   if (p.phase === "out") {
     p.t = Math.min(1, p.t + dt / p.dur);
     const pos = probePos(p, ease(p.t));
@@ -392,39 +432,56 @@ function draw(now) {
     }
   }
 
-  // THE MODEL, AT THE CENTRE. Everything else orbits it.
+  // THE MODEL, AS A BLACK HOLE. Everything else orbits it.
   //
-  // It used to be a small ring labelled "you" — a departure point, because every
-  // question left here to find a tool. That is no longer what happens. Most
-  // questions are answered right here and never go anywhere, so the centre is
-  // drawn as the largest and brightest thing on the map, and it flares when it
-  // answers on its own.
+  // It was a bright star, which was the wrong object. A star radiates outward:
+  // it says the centre sends things out. What actually happens is the opposite —
+  // every question falls in here first, and only the ones this cannot answer
+  // get thrown back out to a tool. Mass falls inward. A black hole is the shape
+  // of that.
+  //
+  // Drawn in three passes so the disc passes BEHIND the horizon and then in
+  // front of it, which is the only thing that makes the shape read as a hole
+  // rather than as a ring with a dot in it.
   const hs = screenOf(home);
-  const R0 = 26 * cam.z;
-  const beat = 1 + .04 * Math.sin(now * .0016) + homePulse * .5;
+  const Rh = 27 * cam.z;                       // the event horizon
+  const flare = homePulse;
 
-  const corona = ctx.createRadialGradient(hs.x, hs.y, R0 * .4, hs.x, hs.y, R0 * (3.4 * beat));
-  corona.addColorStop(0, `rgba(237,113,0,${.30 + homePulse * .45})`);
-  corona.addColorStop(.45, `rgba(237,113,0,${.09 + homePulse * .2})`);
-  corona.addColorStop(1, "rgba(237,113,0,0)");
-  ctx.fillStyle = corona;
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, R0 * 3.4 * beat, 0, TAU); ctx.fill();
+  // --- 1. the far side of the disc, passing behind
+  drawDisc(hs, -1, now, flare);
 
-  const core = ctx.createRadialGradient(
-    hs.x - R0 * .25, hs.y - R0 * .3, R0 * .1, hs.x, hs.y, R0 * beat);
-  core.addColorStop(0, "#fff3e2");
-  core.addColorStop(.5, "#ffb347");
-  core.addColorStop(1, "#ED7100");
-  ctx.fillStyle = core;
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, R0 * beat, 0, TAU); ctx.fill();
+  // --- 2. the horizon. Not dark grey: black, and blacker than the background,
+  // with a rim of lensed light where the background bends around it.
+  const halo = ctx.createRadialGradient(hs.x, hs.y, Rh * .96, hs.x, hs.y, Rh * 2.5);
+  halo.addColorStop(0, `rgba(255,190,120,${.30 + flare * .5})`);
+  halo.addColorStop(.25, `rgba(237,113,0,${.10 + flare * .25})`);
+  halo.addColorStop(1, "rgba(237,113,0,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh * 2.5, 0, TAU); ctx.fill();
 
-  if (cam.z > .55) {
-    ctx.font = (11.5 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
-    ctx.fillStyle = "rgba(255,210,160,.95)";
-    ctx.fillText("Claude", hs.x, hs.y + R0 * 1.9);
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh, 0, TAU); ctx.fill();
+
+  // The photon ring: light that orbited the hole before escaping. Thin, and
+  // brighter than anything else on the screen, because it is.
+  ctx.strokeStyle = `rgba(255,224,178,${.85 + flare * .15})`;
+  ctx.lineWidth = Math.max(1, 1.6 * cam.z);
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh * 1.02, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,140,40,${.35 + flare * .4})`;
+  ctx.lineWidth = Math.max(1, 3.2 * cam.z);
+  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh * 1.09, 0, TAU); ctx.stroke();
+
+  // --- 3. the near side, in front
+  drawDisc(hs, 1, now, flare);
+
+  if (cam.z > .5) {
+    ctx.textAlign = "center";
+    ctx.font = (12 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillStyle = "rgba(255,222,180,.95)";
+    ctx.fillText("Claude", hs.x, hs.y + Rh * 2.9 + 4);
     ctx.font = (9.5 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
-    ctx.fillStyle = "rgba(160,150,150,.75)";
-    ctx.fillText("answers what it can", hs.x, hs.y + R0 * 1.9 + 14 * cam.z);
+    ctx.fillStyle = "rgba(170,160,155,.8)";
+    ctx.fillText("every question falls in here first", hs.x, hs.y + Rh * 2.9 + 18 * cam.z);
   }
 
   // The worlds.
@@ -550,6 +607,32 @@ function draw(now) {
     ctx.restore();
     ctx.shadowBlur = 0;
   }
+}
+
+// Half the accretion disc at a time: side = -1 draws what is behind the hole,
+// side = +1 what is in front. Splitting it around the horizon is what produces
+// the band arcing over the top, and it is the whole illusion.
+//
+// Inner material is hotter and moving faster, so it runs white; outer material
+// cools to orange. One side is brighter than the other because it is rotating
+// toward the viewer — a symmetric disc reads as a logo rather than as physics.
+function drawDisc(hs, side, now, flare) {
+  const tilt = .30;
+  for (const d of disc) {
+    const sy = Math.sin(d.a);
+    if (side < 0 ? sy > 0 : sy <= 0) continue;
+    const x = hs.x + Math.cos(d.a) * d.r * cam.z;
+    const y = hs.y + sy * d.r * tilt * cam.z;
+    const heat = 1 - Math.min(1, (d.r - 32) / 50);          // 1 inner, 0 outer
+    const dop = .35 + .65 * (.5 + .5 * Math.cos(d.a - 0.4)); // brighter approaching
+    const a = (.20 + heat * .55) * dop * d.w * (1 + flare * .8);
+    ctx.globalAlpha = Math.min(1, a);
+    ctx.fillStyle = heat > .66 ? "#fff4e2" : heat > .33 ? "#ffc06a" : "#ED7100";
+    ctx.beginPath();
+    ctx.arc(x, y, (.9 + heat * 1.5) * cam.z * (1 + flare * .5), 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 let last = performance.now();
