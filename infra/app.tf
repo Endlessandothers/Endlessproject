@@ -79,19 +79,21 @@ resource "aws_security_group" "app" {
   description = "endless-app: HTTP in, everything out."
   vpc_id      = aws_vpc.app.id
 
-  # ONE ADDRESS, because the container now carries a key.
+  # NAMED ADDRESSES ONLY, because the container carries a key.
   #
   # While a visitor brought their own credential, an open port cost nothing: a
   # stranger reaching this page got a form and no way to use it. That stopped
   # being true the moment the app started calling on the operator's behalf. An
   # open page holding a working key is an open relay to this account's credits,
   # and every search behind it is an Opus 5 call billed here.
+  #
+  # This list is maintenance, not security design — see app_allowed_cidrs.
   ingress {
-    description = "The page itself, from the one address that uses it."
+    description = "The page itself, from the addresses that use it."
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = [var.app_allowed_cidr]
+    cidr_blocks = var.app_allowed_cidrs
   }
 
   # Outbound is open because the app must reach the MCP endpoint, CloudFront and

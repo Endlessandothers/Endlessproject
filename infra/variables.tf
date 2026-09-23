@@ -109,10 +109,28 @@ variable "app_desired_count" {
   default     = 1
 }
 
-variable "app_allowed_cidr" {
-  description = "Who may reach the app. Defaults to one address because the app now carries a key and there is one user. Set it to 0.0.0.0/0 to reopen it, but only alongside removing app_key_param — an open page holding a working key is an open door to someone else's credits and, worse, to Opus 5 calls billed to this account. Home broadband addresses move; if the page stops answering, this is the first thing to check."
-  type        = string
-  default     = "109.157.66.87/32"
+variable "app_allowed_cidrs" {
+  description = <<-EOT
+    Who may reach the app. A list, because the app carries a key and there is
+    one user on more than one device.
+
+    Set it to ["0.0.0.0/0"] to reopen it, but only alongside removing
+    app_key_param — an open page holding a working key is an open door to this
+    account's credits and, worse, to Opus 5 calls billed here.
+
+    THESE ADDRESSES EXPIRE. Home broadband moves occasionally; a mobile carrier
+    reassigns constantly, often daily. When the page stops answering this is the
+    first thing to check, and the mobile entry is the one that will have gone.
+    Curl https://checkip.amazonaws.com from the device that cannot get in.
+
+    A passphrase in front of the page would end the maintenance entirely and
+    cost nothing. This list is the cheaper thing to do first, not the better one.
+  EOT
+  type        = list(string)
+  default = [
+    "109.157.66.87/32", # laptop, home broadband
+    "85.255.237.7/32",  # phone, mobile — expect this to rotate
+  ]
 }
 
 variable "app_key_param" {
