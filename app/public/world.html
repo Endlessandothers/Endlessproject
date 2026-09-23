@@ -209,17 +209,47 @@ async function load() {
 // change, an arc reads as a journey — which is the entire reason for drawing
 // this instead of printing a row.
 function launch(target, opts) {
-  const c = {
-    x: (home.x + target.x) / 2 - (target.y - home.y) * .28,
-    y: (home.y + target.y) / 2 + (target.x - home.x) * .28,
-  };
-  probe = {
-    from: { x: home.x, y: home.y }, to: { x: target.x, y: target.y }, c,
-    t: 0, dur: 1500 + Math.min(1400, Math.hypot(target.x - home.x, target.y - home.y) * 1.6),
-    phase: "out", wait: 0, trail: [], target, ...opts,
-  };
+  beginLeg({ x: home.x, y: home.y }, target, opts.mode);
+  probe = Object.assign(probe, { stops: [], ...opts, target });
+  aimCamera(target, opts.mode);
+}
+
+// A TOUR, BECAUSE AN ANSWER CAN COME FROM SEVERAL PLACES.
+//
+// "Compare the air quality in Lisbon and Porto" is two calls to one tool;
+// "which is cleanest of three cities" is three. Drawing one hop for any of
+// those would misreport where the answer came from, and showing the mechanism
+// is the only reason this map exists over a list.
+//
+// Stops are the DISTINCT tools visited. Three calls to air-by-place is one
+// place visited three times, and flying there three times would be theatre.
+function tour(targets, opts) {
+  const [first, ...rest] = targets;
+  beginLeg({ x: home.x, y: home.y }, first, opts.mode);
+  probe = Object.assign(probe, { stops: rest, ...opts, target: first });
+  aimCamera(first, opts.mode);
+}
+
+function aimCamera(target, mode) {
   cam.tx = target.x; cam.ty = target.y;
-  cam.tz = opts.mode === "gap" ? .8 : 1.28;
+  cam.tz = mode === "gap" ? .8 : 1.28;
+}
+
+// One leg of a journey. A quadratic arc rather than a straight line: a straight
+// line reads as a state change, an arc reads as travel.
+function beginLeg(from, to, mode) {
+  const c = {
+    x: (from.x + to.x) / 2 - (to.y - from.y) * .28,
+    y: (from.y + to.y) / 2 + (to.x - from.x) * .28,
+  };
+  const keep = probe?.trail ?? [];
+  probe = {
+    from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y }, c,
+    t: 0, dur: 900 + Math.min(1400, Math.hypot(to.x - from.x, to.y - from.y) * 1.5),
+    phase: "out", wait: 0, trail: keep, mode,
+    stops: probe?.stops ?? [], onArrive: probe?.onArrive, onDone: probe?.onDone,
+    target: to, visited: probe?.visited ?? [],
+  };
 }
 
 function probePos(p, t) {
@@ -264,30 +294,47 @@ function step(dt) {
     p.t = Math.min(1, p.t + dt / p.dur);
     const pos = probePos(p, ease(p.t));
     p.trail.push({ x: pos.x, y: pos.y, life: 1 });
-    if (p.trail.length > 70) p.trail.shift();
+    if (p.trail.length > 90) p.trail.shift();
     if (p.t >= 1) {
       p.phase = "arrive"; p.wait = 0;
-      p.onArrive?.();
       if (p.mode === "gap") {
         // Nothing here does it. The dust IS the record being written.
         for (let i = 0; i < 5; i++) setTimeout(() => puff(p.to.x, p.to.y, 26, 1.5), i * 170);
       } else {
-        p.target.pulse = 1;
+        if (p.target && p.target.pulse !== undefined) p.target.pulse = 1;
         puff(p.to.x, p.to.y, 16, .8, "237,113,0");
       }
+      // Only once the LAST stop is reached, because the answer describes all of
+      // them and revealing it at the first would be a lie about the journey.
+      if (!p.stops.length) p.onArrive?.();
     }
   } else if (p.phase === "arrive") {
     p.wait += dt;
-    if (p.wait > (p.mode === "gap" ? 1600 : 1000)) { p.phase = "back"; p.t = 1; }
-  } else {
-    p.t = Math.max(0, p.t - dt / (p.dur * .8));
+    const dwell = p.mode === "gap" ? 1600 : (p.stops.length ? 480 : 1000);
+    if (p.wait > dwell) {
+      if (p.stops.length) {
+        const next = p.stops.shift();
+        const here = { x: p.to.x, y: p.to.y };
+        beginLeg(here, next, p.mode);
+        probe.target = next;
+        aimCamera(next, p.mode);
+      } else {
+        // The return leg is its own arc, from wherever the tour ended rather
+        // than from where it began.
+        beginLeg({ x: p.to.x, y: p.to.y }, home, p.mode);
+        probe.phase = "home";
+      }
+    }
+  } else if (p.phase === "home") {
+    p.t = Math.min(1, p.t + dt / p.dur);
     const pos = probePos(p, ease(p.t));
     p.trail.push({ x: pos.x, y: pos.y, life: 1 });
-    if (p.trail.length > 70) p.trail.shift();
-    if (p.t <= 0) {
+    if (p.trail.length > 90) p.trail.shift();
+    if (p.t >= 1) {
       p.onDone?.();
       probe = null;
       cam.tx = 0; cam.ty = 0; cam.tz = 1;
+      return;
     }
   }
   for (const t of p.trail) t.life -= dt / 900;
@@ -686,7 +733,16 @@ async function search() {
     return;
   }
 
-  const target = d.tool_id ? bodies.find((b) => b.tool_id === d.tool_id) : null;
+  // The DISTINCT tools this answer came from, in the order they were first
+  // reached. Three calls to one tool is one place to visit; two tools is a
+  // journey with two stops.
+  const seen = new Set();
+  const stops = (d.calls ?? [])
+    .map((c) => c.tool_id)
+    .filter((id) => id && !seen.has(id) && seen.add(id))
+    .map((id) => bodies.find((b) => b.tool_id === id))
+    .filter(Boolean);
+  const target = stops[0] ?? (d.tool_id ? bodies.find((b) => b.tool_id === d.tool_id) : null);
 
   // 3. NOBODY COULD. Ride out past the rim and watch the need get written down.
   if (!target) {
@@ -711,9 +767,12 @@ async function search() {
     return;
   }
 
-  // 2. A TOOL DID IT. Fly there, and land with the answer.
-  setStatus("asking " + (target.name ?? target.tool_id));
-  launch(target, {
+  // 2. TOOLS DID IT. Visit each one, then come home with the answer.
+  const route = stops.length ? stops : [target];
+  setStatus(route.length > 1
+    ? "asking " + route.length + " tools"
+    : "asking " + (target.name ?? target.tool_id));
+  tour(route, {
     mode: "find",
     onArrive: () => { setStatus(""); showAnswer(q, d, target); },
     onDone: () => { $("#go").disabled = false; },
@@ -730,15 +789,24 @@ function showAnswer(question, d, b) {
     // and the old page conflated them by only ever naming a tool.
     ? "answered by <b>Claude</b>, no tool needed" +
       (d.gap_logged ? " — but expensively, so it is recorded as a tool worth having" : "")
-    : "answered by <b>" + esc(d.tool_name ?? d.tool_id) + "</b>" + (d.ms ? " · " + esc(d.ms) + "ms" : "");
+    : (d.calls ?? []).length > 1
+      // Naming only the first tool would under-report an answer that came from
+      // three, which is exactly what the old single-call response shape did.
+      ? "answered using <b>" + d.calls.length + " tool calls</b> across " +
+        new Set(d.calls.map((c) => c.tool_id)).size + " tool" +
+        (new Set(d.calls.map((c) => c.tool_id)).size === 1 ? "" : "s")
+      : "answered by <b>" + esc(d.tool_name ?? d.tool_id) + "</b>" + (d.ms ? " · " + esc(d.ms) + "ms" : "");
   showPanel(
     "<p class=\"sub\" style=\"margin-bottom:8px\">" + esc(question) + "</p>" +
     "<p class=\"answer\">" + esc(d.answer ?? "") + "</p>" +
     "<p class=\"via\">" + via + "</p>" +
     (d.error ? "<div class=\"gapnote\">" + esc(d.error) + "</div>" : "") +
-    (d.result != null
+    ((d.calls ?? []).length
       ? "<details><summary>what it actually ran, and what came back</summary>" +
-        "<pre>" + esc(JSON.stringify({ input: d.input, result: d.result }, null, 2)) + "</pre></details>"
+        d.calls.map((c) =>
+          "<pre>" + esc(c.tool_id + " " + JSON.stringify(c.input)) + "\n" +
+          esc(JSON.stringify(c.error ? { error: c.error } : c.result, null, 2)) + "</pre>").join("") +
+        "</details>"
       : "") +
     "<div class=\"row\">" +
     (b ? "<button class=\"ghost\" id=\"manual\">Drive it yourself</button>" : "") +

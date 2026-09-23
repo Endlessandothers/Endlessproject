@@ -55,6 +55,10 @@ const TIMEOUT_MS = Number(process.env.ANSWER_TIMEOUT_MS || 20000);
 // plus a few tool descriptions and barely moves, while output carries the
 // thinking — which is where an expensive answer actually spends.
 const EXPENSIVE_OUTPUT_TOKENS = Number(process.env.ANSWER_EXPENSIVE_TOKENS || 1200);
+// How many times the model may reach again after seeing results. Enough for
+// "compare A and B and say which is better", short of a loop that outlives the
+// Lambda - the fail-soft path cannot run when the function itself is killed.
+const MAX_TURNS = Number(process.env.ANSWER_MAX_TURNS || 4);
 
 const lambda = new LambdaClient({});
 const ssm = new SSMClient({});
@@ -212,107 +216,159 @@ export const handler = async (event) => {
       messages,
     }, { timeout: TIMEOUT_MS });
 
-    const use = (first.content ?? []).find((b) => b.type === "tool_use");
     const textOf = (m) => (m.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-    const firstOut = first.usage?.output_tokens ?? 0;
+    const usesOf = (m) => (m.content ?? []).filter((b) => b.type === "tool_use");
+
+    let msg = first;
+    let inTokens = first.usage?.input_tokens ?? 0;
+    let outTokens = first.usage?.output_tokens ?? 0;
 
     // ---------------------------------------------------------------- 1. it knew
-    if (!use) {
-      const answer = textOf(first);
-      // Answered without a tool. Not a gap in itself — but if it cost a lot to
-      // answer, a tool would have paid for itself, and that is worth recording
-      // as a different kind of demand.
-      const expensive = firstOut >= EXPENSIVE_OUTPUT_TOKENS;
+    if (!usesOf(msg).length) {
+      const answer = textOf(msg);
+      // Answered without a tool. Not a gap in itself - but if it cost a lot to
+      // answer, a tool would have paid for itself, and that is a different kind
+      // of demand worth recording.
+      const expensive = outTokens >= EXPENSIVE_OUTPUT_TOKENS;
       const gap_id = expensive
         ? await recordGap(deferred, {
-            reason: "answered_but_expensive",
-            decided_by: MODEL,
-            answered_without_tool: true,
-            output_tokens: firstOut,
+            reason: "answered_but_expensive", decided_by: MODEL,
+            answered_without_tool: true, output_tokens: outTokens,
           })
         : null;
 
       console.log(JSON.stringify({
         metric: "answer", route: "model", tool_id: null,
-        in: first.usage?.input_tokens ?? 0, out: firstOut, expensive, gap_id,
+        in: inTokens, out: outTokens, expensive, gap_id,
       }));
 
       return json(200, {
         question, answer, tool_id: null, answered_by: "model",
-        tokens: { out: firstOut },
+        tokens: { in: inTokens, out: outTokens },
         // Said plainly rather than left to be inferred. "No tool was used" and
         // "no tool exists" are different facts and were being conflated.
-        needed_a_tool: false,
-        gap_logged: gap_id !== null,
-        ...(expensive ? { note: "Answered without a tool, but expensively — recorded as a tool worth having." } : {}),
+        needed_a_tool: false, gap_logged: gap_id !== null, calls: [],
+        ...(expensive ? { note: "Answered without a tool, but expensively - recorded as a tool worth having." } : {}),
       });
     }
 
-    // ---------------------------------------------------------------- 3. neither
-    if (use.name === UNMET) {
-      const need = use.input?.need ?? question;
-      const gap_id = await recordGap(deferred, {
-        reason: "model_cannot_answer",
-        decided_by: MODEL,
-        need_label: String(need).slice(0, 200),
-      });
+    // ---------------------------------------------------------------- 2/3. it reached
+    //
+    // A LOOP, BECAUSE ONE TURN WAS NEVER ENOUGH.
+    //
+    // The first version took the first tool_use block and ignored the rest.
+    // That is not a partial answer, it is a 400: every tool_use must be answered
+    // by a tool_result in the very next message, so "compare the air quality in
+    // Lisbon and Porto" - two calls emitted together - failed outright.
+    //
+    // So every block in a turn is run, and the turn repeats while the model
+    // keeps reaching. Calls within a turn go in PARALLEL: the model emitted them
+    // together because they do not depend on each other, and running them in
+    // series would add a second of latency per city for no reason.
+    const calls = [];
+    let turns = 0;
 
-      console.log(JSON.stringify({
-        metric: "answer", route: "unmet", need, gap_id,
-        in: first.usage?.input_tokens ?? 0, out: firstOut,
+    while (usesOf(msg).length && turns < MAX_TURNS) {
+      const uses = usesOf(msg);
+
+      // The model giving up. Only honoured before any tool has run - once a
+      // tool has produced something, "nothing here can answer this" is a
+      // contradiction, and the gap log must not take it.
+      const quit = uses.find((u) => u.name === UNMET);
+      if (quit && calls.length === 0) {
+        const need = quit.input?.need ?? question;
+        const gap_id = await recordGap(deferred, {
+          reason: "model_cannot_answer", decided_by: MODEL,
+          need_label: String(need).slice(0, 200),
+        });
+        console.log(JSON.stringify({
+          metric: "answer", route: "unmet", need, gap_id, in: inTokens, out: outTokens,
+        }));
+        return json(200, {
+          question,
+          answer: `Nothing here can answer that - it needs ${need}, and no tool in the registry provides it. It has been recorded as a need nobody met.`,
+          tool_id: null, answered_by: "nobody", need: String(need).slice(0, 200),
+          needed_a_tool: true, gap_logged: gap_id !== null, calls: [],
+        });
+      }
+
+      const results = await Promise.all(uses.map(async (u) => {
+        if (u.name === UNMET) {
+          return {
+            type: "tool_result", tool_use_id: u.id, is_error: true,
+            content: "Some tools already returned. Answer from what they gave you.",
+          };
+        }
+        const chosen = byName.get(u.name);
+        if (!chosen) {
+          return {
+            type: "tool_result", tool_use_id: u.id, is_error: true,
+            content: `No such tool: ${u.name}`,
+          };
+        }
+        const ran = await forward(EXEC_FN, auth, "/call", {
+          tool_id: chosen.tool_id, input: u.input, actor,
+        });
+        const failed = ran.status !== 200;
+        calls.push({
+          tool_id: chosen.tool_id, tool_name: chosen.name, input: u.input,
+          result: failed ? null : ran.body.result,
+          error: failed ? (ran.body.error ?? `failed (${ran.status})`) : null,
+          ms: ran.body.ms ?? null,
+        });
+        // A failure is fed back as a tool_result rather than thrown, so a broken
+        // tool produces a sentence explaining that instead of a stack trace
+        // reaching somebody who asked about the weather.
+        return {
+          type: "tool_result", tool_use_id: u.id, is_error: failed,
+          content: JSON.stringify(failed ? { error: ran.body.error ?? `failed (${ran.status})` } : ran.body.result),
+        };
       }));
 
-      return json(200, {
-        question,
-        answer: `Nothing here can answer that — it needs ${need}, and no tool in the registry provides it. It has been recorded as a need nobody met.`,
-        tool_id: null, answered_by: "nobody", need: String(need).slice(0, 200),
-        needed_a_tool: true, gap_logged: gap_id !== null,
-      });
+      messages.push({ role: "assistant", content: msg.content });
+      messages.push({ role: "user", content: results });
+
+      msg = await ai.messages.create({
+        model: MODEL, max_tokens: 2000, system: SYSTEM,
+        output_config: { effort: "low" }, tools,
+        messages,
+      }, { timeout: TIMEOUT_MS });
+
+      inTokens += msg.usage?.input_tokens ?? 0;
+      outTokens += msg.usage?.output_tokens ?? 0;
+      turns++;
     }
 
-    // ---------------------------------------------------------------- 2. a tool does it
-    const chosen = byName.get(use.name);
-    if (!chosen) return json(500, { error: `model called an unknown tool: ${use.name}` });
-
-    const ran = await forward(EXEC_FN, auth, "/call", {
-      tool_id: chosen.tool_id, input: use.input, actor,
-    });
-    const failed = ran.status !== 200;
-
-    // The failure is fed back as a tool_result rather than thrown, so a broken
-    // tool produces a sentence explaining that instead of a stack trace reaching
-    // somebody who asked about the weather.
-    messages.push({ role: "assistant", content: first.content });
-    messages.push({
-      role: "user",
-      content: [{
-        type: "tool_result", tool_use_id: use.id, is_error: failed,
-        content: JSON.stringify(failed ? { error: ran.body.error ?? `failed (${ran.status})` } : ran.body.result),
-      }],
-    });
-
-    const second = await ai.messages.create({
-      model: MODEL, max_tokens: 1500, system: SYSTEM,
-      output_config: { effort: "low" }, tools,
-      messages,
-    }, { timeout: TIMEOUT_MS });
+    // Ran out of turns with the model still reaching. Better to say what was
+    // gathered than to loop until the Lambda is killed and returns no body at
+    // all - which is exactly how the judge failed once.
+    const exhausted = usesOf(msg).length > 0;
 
     console.log(JSON.stringify({
-      metric: "answer", route: "tool", tool_id: chosen.tool_id, ok: !failed,
-      in: (first.usage?.input_tokens ?? 0) + (second.usage?.input_tokens ?? 0),
-      out: firstOut + (second.usage?.output_tokens ?? 0),
+      metric: "answer", route: "tool", turns, tool_calls: calls.length,
+      tools: calls.map((c) => c.tool_id), exhausted, in: inTokens, out: outTokens,
     }));
 
+    const firstCall = calls[0] ?? null;
     return json(200, {
       question,
-      answer: textOf(second) || "The tool ran but produced nothing to report.",
-      tool_id: chosen.tool_id, tool_name: chosen.name, answered_by: "tool",
-      needed_a_tool: true, gap_logged: false,
-      // The raw result travels too. The prose is for a person; anything built
-      // on this should read the object rather than parse the sentence.
-      input: use.input, result: failed ? null : ran.body.result,
-      error: failed ? (ran.body.error ?? `failed (${ran.status})`) : null,
-      ms: ran.body.ms ?? null,
+      answer: textOf(msg) || (exhausted
+        ? "Stopped after too many steps. What was gathered is below."
+        : "The tools ran but produced nothing to report."),
+      answered_by: "tool", needed_a_tool: true, gap_logged: false,
+      // Every call, in order, so a question answered from three tools can be
+      // checked against all three rather than only the first.
+      calls, turns, exhausted,
+      tokens: { in: inTokens, out: outTokens },
+      // The single-call shape is kept because the pages and anything built on
+      // the old response still read it. It names the FIRST tool, which for a
+      // one-call answer is the only tool and for several is where it started.
+      tool_id: firstCall?.tool_id ?? null,
+      tool_name: firstCall?.tool_name ?? null,
+      input: firstCall?.input ?? null,
+      result: firstCall?.result ?? null,
+      error: firstCall?.error ?? null,
+      ms: firstCall?.ms ?? null,
     });
   } catch (err) {
     console.error(err);

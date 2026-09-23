@@ -192,11 +192,14 @@ async function ask() {
           <div class="meta">${d.answered_by === "model"
             ? "answered by Claude, no tool needed" + (d.gap_logged
                 ? " — but expensively, so it is recorded as a tool worth having" : "")
-            : "answered by " + esc(d.tool_name ?? d.tool_id) + (d.ms ? " · " + esc(d.ms) + "ms" : "")}</div>
+            : (d.calls ?? []).length > 1
+              ? `answered using ${d.calls.length} tool calls`
+              : "answered by " + esc(d.tool_name ?? d.tool_id) + (d.ms ? " · " + esc(d.ms) + "ms" : "")}</div>
           ${d.error ? `<div class="note bad" style="margin-top:10px">${esc(d.error)}</div>` : ""}
-          ${d.result != null ? `<details style="margin-top:10px">
+          ${(d.calls ?? []).length ? `<details style="margin-top:10px">
             <summary style="font-size:.78rem;color:var(--dim);cursor:pointer">what it actually ran, and what came back</summary>
-            <pre style="margin-top:8px">${esc(JSON.stringify({ input: d.input, result: d.result }, null, 2))}</pre>
+            ${d.calls.map(c => `<pre style="margin-top:8px">${esc(c.tool_id + " " + JSON.stringify(c.input))}
+${esc(JSON.stringify(c.error ? { error: c.error } : c.result, null, 2))}</pre>`).join("")}
           </details>` : ""}
         </div>`;
     }

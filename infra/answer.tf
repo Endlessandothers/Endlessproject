@@ -141,6 +141,7 @@ resource "aws_lambda_function" "answer" {
       ANSWER_TIMEOUT_MS       = tostring(var.answer_timeout_ms)
       GAPS_TABLE              = aws_dynamodb_table.gaps.name
       ANSWER_EXPENSIVE_TOKENS = tostring(var.answer_expensive_tokens)
+      ANSWER_MAX_TURNS        = tostring(var.answer_max_turns)
     }
   }
 

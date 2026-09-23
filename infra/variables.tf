@@ -121,6 +121,12 @@ variable "answer_expensive_tokens" {
   default     = 1200
 }
 
+variable "answer_max_turns" {
+  description = "How many times the model may reach for tools again after seeing results. One turn was never enough: a question like 'compare the air quality in Lisbon and Porto' emits two tool_use blocks at once, and every one of them must be answered by a tool_result in the very next message or the API rejects the whole request. Four is enough for gather-then-compare and short of a loop that outlives the Lambda, because the fail-soft path cannot run when the function itself is killed."
+  type        = number
+  default     = 4
+}
+
 variable "answer_timeout_ms" {
   description = "Request timeout on each model call in answer-fn. Two of these plus a 30s tool run must stay inside the function's 90s timeout, because the fail-soft path cannot run when the Lambda itself is killed — which is how the judge once returned no body at all."
   type        = number
