@@ -98,9 +98,9 @@ variable "anthropic_key_param" {
 }
 
 variable "app_image_tag" {
-  description = "Which endless-app image the Fargate task runs. Bump it after pushing a new one; a tag rather than a digest so a redeploy is one variable change. Note it is NOT `latest`, deliberately — but that means pushing `latest` and forcing a new deployment changes nothing, which cost a confused half hour once. Push the new tag, then bump this."
+  description = "Which endless-app image the Fargate task runs. A MOVING tag, and deliberately so: .github/workflows/app-image.yml moves `main` on every merge and restarts the service, so a deploy no longer touches terraform at all. The previous arrangement pinned v1, v2, v3... purely so terraform would notice a change, and it caused two silent no-op deploys — an image pushed as `latest` while the definition pinned `v1` changes nothing, and the page keeps serving old code while reporting healthy. Every image is also tagged sha-<commit>; set this to one of those to pin or roll back."
   type        = string
-  default     = "v4"
+  default     = "main"
 }
 
 variable "app_desired_count" {

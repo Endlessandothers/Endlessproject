@@ -300,3 +300,114 @@ resource "aws_iam_role_policy" "apply" {
   role   = aws_iam_role.apply.id
   policy = data.aws_iam_policy_document.apply.json
 }
+
+# ---------------------------------------------------------------- image role
+#
+# BUILDING THE APP IMAGE IS NOT TERRAFORM'S JOB, so it does not get terraform's
+# role.
+#
+# Until now the image was built on a laptop with Docker Desktop and pushed by
+# hand, which made a personal machine a dependency of every deploy — and once
+# broke a terraform run outright when Docker's memory use exhausted the paging
+# file mid-apply. The apply role cannot do this work: it holds no ECR or ECS
+# permission at all, which is also why app.tf has only ever been deployable
+# from that laptop.
+#
+# The fix is a third role rather than a wider second one. This can push one
+# image to one repository and restart one service. It cannot read the state
+# bucket, cannot touch DynamoDB, cannot see a single Lambda. If a workflow is
+# ever compromised, the blast radius is "the app container is replaced with
+# something else" — bad, and still far short of what the apply role could do.
+data "aws_iam_policy_document" "image_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    # Default branch only, exactly as the apply role is scoped. A pull request
+    # from a fork must never be able to replace what production runs.
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["${var.sub_claim_prefix}:ref:refs/heads/${var.apply_branch}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "image" {
+  name                 = "endless-gha-image"
+  description          = "Builds and pushes the app image, and restarts the service. Nothing else."
+  assume_role_policy   = data.aws_iam_policy_document.image_assume.json
+  max_session_duration = 3600
+}
+
+data "aws_iam_policy_document" "image" {
+  # Account-wide because the API takes no resource. It returns a token that is
+  # then constrained by the repository-scoped statement below.
+  statement {
+    sid       = "GetAnEcrToken"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PushToTheAppRepositoryOnly"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+      "ecr:BatchGetImage",
+      "ecr:DescribeImages",
+      "ecr:GetDownloadUrlForLayer",
+    ]
+    resources = ["arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/endless-p0-app"]
+  }
+
+  # Restarting the service is how a new image reaches production, because the
+  # task definition points at a moving tag. No RegisterTaskDefinition here: a
+  # workflow that could write task definitions could mount any image it liked
+  # with any role it liked, which is a different and much larger power.
+  statement {
+    sid       = "RestartTheAppServiceOnly"
+    effect    = "Allow"
+    actions   = ["ecs:UpdateService", "ecs:DescribeServices"]
+    resources = ["arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/endless-p0-app/endless-p0-app"]
+  }
+
+  statement {
+    sid       = "WatchItComeUp"
+    effect    = "Allow"
+    actions   = ["ecs:ListTasks", "ecs:DescribeTasks"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "ecs:cluster"
+      values   = ["arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/endless-p0-app"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "image" {
+  name   = "endless-gha-image-policy"
+  role   = aws_iam_role.image.id
+  policy = data.aws_iam_policy_document.image.json
+}
+
+output "image_role_arn" {
+  description = "Set as IMAGE_ROLE in .github/workflows/app-image.yml."
+  value       = aws_iam_role.image.arn
+}

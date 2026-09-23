@@ -1,0 +1,106 @@
+# Build the app image and restart the service. No laptop involved.
+#
+# WHY THIS EXISTS
+#
+# The image was built with Docker Desktop on a personal machine and pushed by
+# hand. That made one laptop a dependency of every deploy, and it failed in
+# three separate ways in two days: Docker was not running when a deploy was
+# needed, its memory use exhausted the Windows paging file and killed a
+# terraform provider mid-apply, and twice an image was pushed as `latest` while
+# the task definition pinned `v1` — so the deploy changed nothing at all, twice,
+# while the page kept serving old code and reporting healthy.
+#
+# THE MOVING TAG
+#
+# The task definition now points at `main`, permanently. A push here moves that
+# tag and restarts the service, and terraform is not involved in a deploy at
+# all. That removes the v1/v2/v3/v4 ratchet, which existed only so terraform
+# could notice a change, and was the direct cause of two silent no-op deploys.
+#
+# Every image is ALSO tagged with its commit sha. That is what makes a rollback
+# possible: the moving tag says what is current, the sha tags say what existed.
+#
+# ARM64, on an ARM runner. The task runs on Graviton because it is cheaper per
+# second for identical work. Building that on an x86 runner means QEMU emulation
+# and roughly a tenfold slowdown; `ubuntu-24.04-arm` builds it natively.
+
+name: app image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/app-image.yml"
+  # So a deploy can be triggered without an empty commit — for example to roll
+  # forward after a manual change, or to rebuild on a new base image.
+  workflow_dispatch:
+
+concurrency:
+  # One deploy at a time. Two racing runs would both move `main` and the loser's
+  # image could win, leaving the tag pointing at code nobody asked to deploy.
+  group: app-image
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  IMAGE_ROLE: arn:aws:iam::258506450105:role/endless-gha-image
+  REPOSITORY: 258506450105.dkr.ecr.us-east-1.amazonaws.com/endless-p0-app
+  CLUSTER: endless-p0-app
+  SERVICE: endless-p0-app
+
+permissions:
+  contents: read
+  id-token: write # The OIDC token. Without this the role assume fails.
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume the image role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.IMAGE_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-image-${{ github.run_id }}
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${REPOSITORY%%/*}"
+
+      # Both tags in one push. `main` is what the task definition follows;
+      # sha-<commit> is what a rollback points at.
+      - name: Build and push
+        run: |
+          SHA_TAG="sha-$(git rev-parse --short HEAD)"
+          echo "SHA_TAG=$SHA_TAG" >> "$GITHUB_ENV"
+          docker build \
+            --tag "$REPOSITORY:main" \
+            --tag "$REPOSITORY:$SHA_TAG" \
+            app/
+          docker push "$REPOSITORY:main"
+          docker push "$REPOSITORY:$SHA_TAG"
+
+      # The task definition already names `main`, so the only thing needed is to
+      # make ECS go and fetch it again.
+      - name: Restart the service
+        run: |
+          aws ecs update-service \
+            --cluster "$CLUSTER" --service "$SERVICE" \
+            --force-new-deployment --region "$AWS_REGION" \
+            --query 'service.serviceName' --output text
+
+      # A deploy that reports success while the old task keeps serving is the
+      # exact failure this workflow was written to end, so it waits and says so.
+      - name: Wait for it to be serving
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$CLUSTER" --services "$SERVICE" --region "$AWS_REGION"
+          echo "### Deployed \`$SHA_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Fargate assigns a new public IP on every restart, so the address has changed." >> "$GITHUB_STEP_SUMMARY"
