@@ -97,6 +97,10 @@ async function computeMass() {
   for (const t of await scanAll(TOOLS, (i) => ({
     tool_id: i.tool_id, version: i.version, name: i.name, owner: i.owner,
     owner_verified: i.owner_verified === true,
+    // Published so a reader of the board can call a tool without first being
+    // refused by it. Never a scoring input — see assertNoPaidInputs below,
+    // which the row still passes through.
+    input_schema: i.input_schema ?? null,
   }))) {
     const seen = latest.get(t.tool_id);
     if (!seen || Number(t.version) > Number(seen.version)) latest.set(t.tool_id, t);
@@ -140,6 +144,7 @@ async function computeMass() {
 
     return assertNoPaidInputs({
       ...row, ...decay, name: t.name ?? null, version: t.version,
+      input_schema: t.input_schema ?? null,
       // False means the self_call figure above cannot be relied on for this
       // tool, because its owner string was never checked against a caller.
       ownership_verified: ownershipTrustworthy(t),

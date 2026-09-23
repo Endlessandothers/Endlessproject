@@ -95,6 +95,11 @@ async function loadTools() {
     version: t.version,
     name: t.name,
     description: t.description,
+    // What the tool actually takes. It was always in the row and never came
+    // out, so every caller had to discover the field names by being refused —
+    // which is a fine way to learn a boundary and a terrible way to learn a
+    // form. Not used for ranking; carried so a result is usable on arrival.
+    input_schema: t.input_schema ?? null,
     vector: unpackVector(t.vec_b64),
   }));
 
@@ -121,7 +126,7 @@ async function rankTools(queryVector, queryText, k) {
       const lexical = saturate(bm25(lexIndex, queryText, t.tool_id));
       return {
         tool_id: t.tool_id, version: t.version, name: t.name,
-        description: t.description,
+        description: t.description, input_schema: t.input_schema ?? null,
         score: fuse(dense, lexical, FUSION_ALPHA),
         cosine: dense,
         lexical,

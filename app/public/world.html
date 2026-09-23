@@ -48,6 +48,15 @@
   .stats b{color:var(--ink);font-weight:650}
   .panel input.args{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
     background:#0b0b13;color:var(--ink);font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .fields{display:grid;gap:9px;margin-top:4px}
+  .fields label{display:block;font-size:.74rem;color:var(--dim);margin-bottom:3px}
+  .fields label b{color:var(--ink);font-weight:600;font-size:.8rem;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .fields label .req{color:var(--accent);margin-left:3px}
+  .fields input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
+    background:#0b0b13;color:var(--ink);font:13px ui-sans-serif,system-ui,sans-serif}
+  .fields input:focus{outline:0;border-color:var(--accent)}
+  .nofields{font-size:.82rem;color:var(--dim);margin:2px 0 0}
   .panel .row{display:flex;gap:8px;margin-top:10px}
   .panel button{padding:9px 15px;border-radius:8px;border:0;background:var(--accent);
     color:#fff;font:inherit;font-weight:600;cursor:pointer}
@@ -510,6 +519,50 @@ const setStatus = (s) => { $("#status").textContent = s ?? ""; };
 function hidePanel() { panel.classList.remove("up"); $("#legend").classList.remove("hide"); }
 function showPanel(html) { panel.innerHTML = html; panel.classList.add("up"); $("#legend").classList.add("hide"); }
 
+// A REAL FORM, BUILT FROM THE TOOL'S OWN SCHEMA.
+//
+// This used to ask for a JSON object and offer "{}", which meant the only way
+// to learn that air-quality wants lat and lon was to run it and be refused.
+// The schema was in the registry the whole time and simply never came out of
+// search; it does now. When a tool has no schema the JSON box comes back, so
+// an old row degrades to the old behaviour rather than to nothing.
+function fieldsFor(schema) {
+  const keys = Object.keys(schema ?? {});
+  if (!keys.length) {
+    return schema
+      ? "<p class=\"nofields\">Takes no arguments.</p>"
+      : "<div class=\"fields\"><label>Arguments, as JSON — this tool published no schema</label>" +
+        "<input class=\"args\" id=\"raw\" value=\"{}\" spellcheck=\"false\"></div>";
+  }
+  return "<div class=\"fields\">" + keys.map((k) => {
+    const f = schema[k] ?? {};
+    return "<div><label for=\"f-" + esc(k) + "\"><b>" + esc(k) + "</b>" +
+      (f.required ? "<span class=\"req\">required</span>" : "") +
+      (f.description ? " — " + esc(f.description) : "") + "</label>" +
+      "<input id=\"f-" + esc(k) + "\" data-key=\"" + esc(k) + "\" data-type=\"" +
+      esc(f.type ?? "string") + "\" " +
+      (f.type === "number" ? "type=\"number\" step=\"any\" " : "") +
+      "placeholder=\"" + esc(f.type ?? "string") + "\" spellcheck=\"false\"></div>";
+  }).join("") + "</div>";
+}
+
+// Empty optional fields are omitted rather than sent as "", which a tool would
+// have to defend against. Empty REQUIRED fields are sent as empty so the tool's
+// own validation — not this page's guess at it — produces the message.
+function readFields(schema) {
+  const raw = document.getElementById("raw");
+  if (raw) return JSON.parse(raw.value || "{}");
+  const out = {};
+  for (const el of document.querySelectorAll(".fields input[data-key]")) {
+    const v = el.value.trim();
+    if (!v && !(schema?.[el.dataset.key]?.required)) continue;
+    out[el.dataset.key] = el.dataset.type === "number" && v !== "" ? Number(v)
+                        : el.dataset.type === "boolean" ? (v === "true")
+                        : v;
+  }
+  return out;
+}
+
 function showTool(b) {
   selected = b;
   const pct = (v) => v == null ? "—" : Math.round(v * 100) + "%";
@@ -525,8 +578,7 @@ function showTool(b) {
     "</div>" +
     (b.lit ? "" : "<p class=\"desc\" style=\"color:var(--dim)\">Never called. Nothing is known about whether " +
       "it works — which is why it is drawn unlit rather than dim.</p>") +
-    "<label class=\"sub\" style=\"display:block;margin-bottom:5px\">Arguments, as JSON</label>" +
-    "<input class=\"args\" id=\"args\" value=\"{}\" spellcheck=\"false\">" +
+    fieldsFor(b.input_schema) +
     "<div class=\"row\"><button id=\"run\">Run it</button>" +
     "<button class=\"ghost\" id=\"close\">Close</button></div><div id=\"res\"></div>");
   $("#close").onclick = () => { selected = null; hidePanel(); };
@@ -549,7 +601,7 @@ async function runTool(b) {
   if (probe) return;
   const out = $("#res");
   let args;
-  try { args = JSON.parse($("#args").value || "{}"); }
+  try { args = readFields(b.input_schema); }
   catch { out.innerHTML = "<pre style=\"color:#e08a8a\">Arguments are not valid JSON.</pre>"; return; }
   out.innerHTML = "<pre>flying out to it…</pre>";
   // Fly to the tool and bring the answer back, rather than just printing it.

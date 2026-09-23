@@ -45,7 +45,10 @@
   pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;
       overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;margin:0}
   .fields{display:grid;gap:8px;margin:12px 0}
-  .fields label{font-size:.8rem;color:var(--dim)}
+  .fields label{font-size:.8rem;color:var(--dim);display:block;margin-bottom:3px}
+  .fields label b{color:var(--ink);font-weight:600;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .fields input{width:100%}
   .empty{color:var(--dim);padding:28px 0;text-align:center}
   footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-size:.82rem;color:var(--dim)}
 </style>
@@ -191,28 +194,68 @@ async function search() {
   }
 }
 
-// The registry does not publish a tool's input schema through search, so the
-// form is built from whatever the tool complains about on the first attempt.
-// Asking and being told is more honest than guessing the field names.
+// Search now publishes each tool's input schema, so this is a real form.
+//
+// It used to ask for a JSON object and offer "{}", on the reasoning that being
+// refused by the tool was more honest than guessing its field names. That was
+// right about the guessing and wrong about the conclusion: the schema was in
+// the registry the whole time and simply never came out of search. Nobody
+// should have to run air-quality to discover it wants lat and lon.
+//
+// A tool that published no schema still gets the JSON box, so an older row
+// degrades to the previous behaviour rather than to an empty form.
+function fieldsFor(schema, i) {
+  const keys = Object.keys(schema ?? {});
+  if (!keys.length) {
+    return schema
+      ? `<p class="meta">Takes no arguments.</p>`
+      : `<div class="fields"><label>Arguments, as JSON — this tool published no schema</label>
+         <input id="raw-${i}" value="{}" spellcheck="false"></div>`;
+  }
+  return `<div class="fields">` + keys.map((k) => {
+    const f = schema[k] ?? {};
+    return `<div>
+      <label for="f-${i}-${esc(k)}"><b>${esc(k)}</b>${f.required ? " (required)" : ""}${
+        f.description ? " — " + esc(f.description) : ""}</label>
+      <input id="f-${i}-${esc(k)}" data-key="${esc(k)}" data-type="${esc(f.type ?? "string")}"
+             ${f.type === "number" ? 'type="number" step="any"' : ""}
+             placeholder="${esc(f.type ?? "string")}" spellcheck="false">
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+// Empty optional fields are omitted rather than sent as "", which a tool would
+// have to defend against. Empty required ones are sent, so the tool's own
+// validation produces the message instead of this page guessing at it.
+function readFields(schema, i) {
+  const raw = document.getElementById(`raw-${i}`);
+  if (raw) return JSON.parse(raw.value || "{}");
+  const out = {};
+  for (const el of document.querySelectorAll(`#run-${i} .fields input[data-key]`)) {
+    const v = el.value.trim();
+    if (!v && !(schema?.[el.dataset.key]?.required)) continue;
+    out[el.dataset.key] = el.dataset.type === "number" && v !== "" ? Number(v)
+                        : el.dataset.type === "boolean" ? (v === "true")
+                        : v;
+  }
+  return out;
+}
+
 window.openRun = (i) => {
   const r = lastResults[i];
   const slot = document.getElementById(`run-${i}`);
   if (slot.dataset.open) return;
   slot.dataset.open = "1";
-  slot.innerHTML = `
-    <div class="fields">
-      <label>Arguments, as JSON</label>
-      <input id="args-${i}" value="{}" spellcheck="false">
-    </div>
-    <button onclick="run(${i})">Run it</button>
-    <div id="res-${i}"></div>`;
+  slot.innerHTML = fieldsFor(r.input_schema, i) +
+    `<button onclick="run(${i})" style="margin-top:12px">Run it</button>
+     <div id="res-${i}"></div>`;
 };
 
 window.run = async (i) => {
   const r = lastResults[i];
   const slot = document.getElementById(`res-${i}`);
   let args;
-  try { args = JSON.parse(document.getElementById(`args-${i}`).value || "{}"); }
+  try { args = readFields(r.input_schema, i); }
   catch { slot.innerHTML = `<div class="note bad">Arguments are not valid JSON.</div>`; return; }
 
   slot.innerHTML = `<div class="empty">Running…</div>`;

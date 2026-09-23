@@ -148,9 +148,16 @@ async function callTool(name, args, auth, actor) {
     // Trimmed on purpose. The raw response carries a vector-scale score, both
     // component scores and the threshold, which are meaningful to someone
     // tuning retrieval and pure noise to an agent choosing a tool.
+    //
+    // input_schema is NOT noise and is passed through. An agent that finds a
+    // tool and then has to discover its argument names by being refused is
+    // being made to pay a round trip for something the registry already knew —
+    // and a description-only row simply has none, which is itself the answer to
+    // "can I call this?".
     return content({
       results: (body.results ?? []).map((r) => ({
         tool_id: r.tool_id, version: r.version, name: r.name, description: r.description,
+        ...(r.input_schema ? { input_schema: r.input_schema } : {}),
       })),
       gap_logged: body.gap_logged,
       ...(body.gap_logged

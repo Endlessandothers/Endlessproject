@@ -100,7 +100,7 @@ variable "anthropic_key_param" {
 variable "app_image_tag" {
   description = "Which endless-app image the Fargate task runs. Bump it after pushing a new one; a tag rather than a digest so a redeploy is one variable change. Note it is NOT `latest`, deliberately — but that means pushing `latest` and forcing a new deployment changes nothing, which cost a confused half hour once. Push the new tag, then bump this."
   type        = string
-  default     = "v3"
+  default     = "v4"
 }
 
 variable "app_desired_count" {
