@@ -19,6 +19,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { CloudFrontClient, CreateInvalidationCommand } from "@aws-sdk/client-cloudfront";
 import { createHash } from "node:crypto";
 import { unpackVector } from "./vector.mjs";
 import { cluster, summarise, assess, RULE, DEFAULT_SIMILARITY } from "./cluster.mjs";
@@ -36,6 +37,38 @@ const GAPS = process.env.GAPS_TABLE;
 const EVENTS = process.env.EVENTS_TABLE;
 const TOOLS = process.env.TOOLS_TABLE;
 const BUCKET = process.env.BOARD_BUCKET;
+const DISTRIBUTION = process.env.BOARD_DISTRIBUTION || "";
+const cloudfront = new CloudFrontClient({});
+
+// WRITING THE BOARD IS NOT PUBLISHING IT.
+//
+// The objects carry max-age=300 and this job runs nightly, so the cache was
+// assumed to take care of itself. It did not. The app served a board five hours
+// older than the one in S3 — one edge held the stale object while another
+// served the fresh one — so a run that completed perfectly changed nothing that
+// anyone could see. In a system whose entire output is a published view, a
+// silent no-op is the worst available failure.
+//
+// Deliberately not fatal. A board that is written but not yet visible is a
+// cache lagging; a run that throws here would turn that into no board at all.
+async function publish(keys) {
+  if (!DISTRIBUTION) return;
+  try {
+    await cloudfront.send(new CreateInvalidationCommand({
+      DistributionId: DISTRIBUTION,
+      InvalidationBatch: {
+        CallerReference: `board-${Date.now()}`,
+        Paths: { Quantity: keys.length, Items: keys.map((k) => `/${k}`) },
+      },
+    }));
+    console.log(JSON.stringify({ metric: "board_invalidated", keys }));
+  } catch (err) {
+    console.error(JSON.stringify({
+      metric: "board_invalidation_failed", error: String(err?.message ?? err),
+      note: "board is written; it will be visible when the edge TTL expires",
+    }));
+  }
+}
 const SIMILARITY = Number(process.env.CLUSTER_SIMILARITY ?? DEFAULT_SIMILARITY);
 
 async function loadGaps() {
@@ -324,6 +357,10 @@ export const handler = async () => {
     ContentType: "application/json",
     CacheControl: "public, max-age=300",
   }));
+
+  // Both public objects in one invalidation: they are read together by the
+  // pages and a half-fresh board is its own kind of wrong.
+  await publish(["tools.json", "gaps.json"]);
 
   console.log(JSON.stringify({
     metric: "mass_run", tools: mass.tools_total, used: mass.tools_with_usage,

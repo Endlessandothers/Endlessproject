@@ -140,6 +140,23 @@ data "aws_iam_policy_document" "cluster" {
     resources = ["${aws_s3_bucket.board.arn}/stasis.json"]
   }
 
+  # PUBLISHING IS NOT THE SAME AS BEING SEEN.
+  #
+  # The board objects carry max-age=300 and the job runs nightly, so the cache
+  # was assumed to sort itself out. It did not: the app served a board five
+  # hours older than the one in S3, because an edge near the task held the old
+  # object while a different edge served the new one. The regeneration ran
+  # perfectly and was invisible, which is the worst shape a bug can take in a
+  # system whose whole output is a published view.
+  #
+  # Invalidation is the only thing that makes "regenerated" mean "visible".
+  # Free up to 1,000 paths a month; this uses two a night.
+  statement {
+    sid       = "MakeTheNewBoardVisible"
+    actions   = ["cloudfront:CreateInvalidation"]
+    resources = [aws_cloudfront_distribution.board.arn]
+  }
+
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
@@ -175,6 +192,7 @@ resource "aws_lambda_function" "cluster" {
       EVENTS_TABLE       = aws_dynamodb_table.events.name
       TOOLS_TABLE        = aws_dynamodb_table.tools.name
       BOARD_BUCKET       = aws_s3_bucket.board.id
+      BOARD_DISTRIBUTION = aws_cloudfront_distribution.board.id
       CLUSTER_SIMILARITY = tostring(var.cluster_similarity)
     }
   }
