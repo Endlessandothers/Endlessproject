@@ -38,6 +38,9 @@ data "aws_iam_policy_document" "mcp" {
     resources = [
       aws_lambda_function.search.arn,
       aws_lambda_function.exec.arn,
+      # endless_answer. The router still holds no model access of its own — it
+      # forwards to the one function that does.
+      aws_lambda_function.answer.arn,
     ]
   }
 
@@ -82,6 +85,7 @@ resource "aws_lambda_function" "mcp" {
     variables = {
       SEARCH_FN = aws_lambda_function.search.function_name
       EXEC_FN   = aws_lambda_function.exec.function_name
+      ANSWER_FN = aws_lambda_function.answer.function_name
       BOARD_URL = "https://${aws_cloudfront_distribution.board.domain_name}/"
     }
   }

@@ -64,6 +64,14 @@
   pre{margin:12px 0 0;max-height:32vh;overflow:auto;background:#0b0b13;border:1px solid var(--line);
       border-radius:8px;padding:11px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
       color:#b9d8c6;white-space:pre-wrap;word-break:break-word}
+  .answer{font-size:1rem;line-height:1.6;color:var(--ink);margin:0 0 12px}
+  .via{font-size:.74rem;color:var(--dim);margin:0 0 10px}
+  .via b{color:var(--accent);font-weight:600}
+  details{margin-top:10px}
+  details summary{font-size:.76rem;color:var(--dim);cursor:pointer;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details summary:before{content:"▸ ";color:var(--accent)}
+  details[open] summary:before{content:"▾ "}
   .gapnote{border-left:3px solid var(--dust);padding-left:12px;color:var(--dust);font-size:.86rem}
   .gapnote ul{margin:6px 0 0;padding-left:18px;color:var(--dim)}
 
@@ -85,8 +93,8 @@
 
 <div class="hud">
   <div class="bar">
-    <input id="q" placeholder="what do you need done?" autocomplete="off" spellcheck="false">
-    <button id="go">Go</button>
+    <input id="q" placeholder="ask a question — how strong is charizard?" autocomplete="off" spellcheck="false">
+    <button id="go">Ask</button>
   </div>
   <div class="status" id="status"></div>
 </div>
@@ -628,18 +636,23 @@ async function search() {
   if (!q || probe) return;
   $("#go").disabled = true;
   selected = null; hidePanel();
-  setStatus("asking the registry…");
+  setStatus("thinking…");
 
+  // ONE CALL, NOT THREE. The page used to search, hand back a tool, and ask the
+  // person to fill in its arguments — which is the right interface for an agent
+  // composing a capability and the wrong one for someone who asked a question.
+  // endless_answer finds the tool, reads the question into its arguments, runs
+  // it and writes the reply. The ride happens after, because by then we know
+  // where we are going.
   let d;
-  try { d = await mcp("endless_search", { query: q, k: 5 }); }
+  try { d = await mcp("endless_answer", { question: q }); }
   catch (e) { setStatus(e.message); $("#go").disabled = false; return; }
 
-  const first = (d.results ?? [])[0];
-  const target = first ? bodies.find(b => b.tool_id === first.tool_id) : null;
+  const target = d.tool_id ? bodies.find((b) => b.tool_id === d.tool_id) : null;
 
-  // No tool, or one this map does not know yet: ride out to empty space and
-  // watch the need get written down.
-  if (d.gap_logged || !target) {
+  // Nothing fits, or it fits something this map has never heard of: ride out
+  // past the rim and watch the need get written down.
+  if (!target) {
     const a = Math.random() * TAU, r = 860 + Math.random() * 180;
     const spot = { x: Math.cos(a) * r, y: Math.sin(a) * r };
     setStatus("nothing here does that — flying out to record it");
@@ -652,23 +665,44 @@ async function search() {
         showPanel(
           "<h2 style=\"color:var(--dust)\">Nothing here can do that</h2>" +
           "<p class=\"sub\">" + esc(q) + "</p>" +
-          "<div class=\"gapnote\">It has been written down as a need nobody met. " +
-          "The dust out there is the record.<ul>" +
-          "<li>When enough separate people ask for the same thing, it becomes a candidate to build.</li>" +
-          "<li>One person asking repeatedly is not demand, and counts once.</li>" +
-          "</ul></div>");
+          "<div class=\"gapnote\">" + esc(d.answer ?? "It has been recorded as a need nobody met.") +
+          "<ul><li>When enough separate people ask for the same thing, it becomes a candidate to build.</li>" +
+          "<li>One person asking repeatedly is not demand, and counts once.</li></ul></div>");
       },
       onDone: () => { $("#go").disabled = false; },
     });
     return;
   }
 
-  setStatus("found it — flying to " + (target.name ?? target.tool_id));
+  setStatus("asking " + (target.name ?? target.tool_id));
   launch(target, {
     mode: "find",
-    onArrive: () => { setStatus(""); showTool(target); },
+    onArrive: () => { setStatus(""); showAnswer(q, d, target); },
     onDone: () => { $("#go").disabled = false; },
   });
+}
+
+// The answer first, in prose, because that is what was asked for. What it ran
+// and what came back are underneath for anyone who wants to check it — visible
+// enough to be checkable, quiet enough not to be the point.
+function showAnswer(question, d, b) {
+  selected = b;
+  showPanel(
+    "<p class=\"sub\" style=\"margin-bottom:8px\">" + esc(question) + "</p>" +
+    "<p class=\"answer\">" + esc(d.answer ?? "") + "</p>" +
+    "<p class=\"via\">answered by <b>" + esc(d.tool_name ?? d.tool_id) + "</b>" +
+      (d.ms ? " · " + esc(d.ms) + "ms" : "") + "</p>" +
+    (d.error ? "<div class=\"gapnote\">" + esc(d.error) + "</div>" : "") +
+    (d.result != null
+      ? "<details><summary>what it actually ran, and what came back</summary>" +
+        "<pre>" + esc(JSON.stringify({ input: d.input, result: d.result }, null, 2)) + "</pre></details>"
+      : "") +
+    "<div class=\"row\"><button class=\"ghost\" id=\"manual\">Drive it yourself</button>" +
+    "<button class=\"ghost\" id=\"close\">Close</button></div><div id=\"slot\"></div>");
+  $("#close").onclick = () => { selected = null; hidePanel(); };
+  // The form is not gone, only no longer the first thing. An agent composing
+  // this tool, or a person who wants a different argument, still needs it.
+  $("#manual").onclick = () => showTool(b);
 }
 
 load().then(() => {

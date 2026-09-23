@@ -75,7 +75,7 @@ const readBody = (req) => new Promise((resolve, reject) => {
 // to the MCP endpoint would let anyone use this container as an anonymising
 // hop, and the endpoint's own rate limiting counts this task's address rather
 // than theirs.
-const ALLOWED = new Set(["endless_search", "endless_call", "endless_gaps"]);
+const ALLOWED = new Set(["endless_answer", "endless_search", "endless_call", "endless_gaps"]);
 
 async function callMcp(auth, name, args) {
   const res = await fetch(MCP_URL, {

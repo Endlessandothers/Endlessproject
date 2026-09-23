@@ -25,6 +25,7 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 const lambda = new LambdaClient({});
 
 const SEARCH_FN = process.env.SEARCH_FN;
+const ANSWER_FN = process.env.ANSWER_FN;
 const EXEC_FN = process.env.EXEC_FN;
 const BOARD_URL = process.env.BOARD_URL || "";
 
@@ -89,6 +90,23 @@ const TOOLS = [
         input: { type: "object", description: "Arguments for the tool, matching its declared input schema." },
       },
       required: ["tool_id"],
+    },
+  },
+  {
+    name: "endless_answer",
+    description:
+      "Ask a question and get an answer. Finds the tool that fits, works out its " +
+      "arguments from the question, runs it, and replies in prose. Returns the raw " +
+      "result alongside the sentence, so anything building on this should read that " +
+      "rather than parse the text. If nothing in the registry fits, it says so and the " +
+      "unmet need is recorded — it will not answer from a tool that does not do the job.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["question"],
+      properties: {
+        question: { type: "string", description: "A question in plain language." },
+      },
     },
   },
   {
@@ -164,6 +182,15 @@ async function callTool(name, args, auth, actor) {
         ? { note: "Nothing in the registry does this. It has been recorded as an unmet need." }
         : {}),
     });
+  }
+
+  if (name === "endless_answer") {
+    if (typeof args?.question !== "string" || !args.question.trim()) {
+      return failure("question is required and must be a non-empty string");
+    }
+    const { status, body } = await forward(ANSWER_FN, auth, { question: args.question, actor });
+    if (status !== 200) return failure(`answer failed (${status}): ${body.error ?? "unknown"}`);
+    return content(body);
   }
 
   if (name === "endless_call") {

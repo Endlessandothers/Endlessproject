@@ -81,12 +81,21 @@
     around, where each tool is a world and every unmet need is a cloud of dust.</span></p>
 
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="search" aria-selected="true">Find a tool</button>
+    <button role="tab" data-tab="ask" aria-selected="true">Ask</button>
+    <button role="tab" data-tab="search" aria-selected="false">Find a tool</button>
     <button role="tab" data-tab="gaps" aria-selected="false">Unmet needs</button>
     <button role="tab" data-tab="tools" aria-selected="false">What gets used</button>
   </div>
 
-  <section id="search">
+  <section id="ask">
+    <div class="row">
+      <input id="aq" placeholder="ask a question — how strong is charizard?" autocomplete="off">
+      <button id="ago">Ask</button>
+    </div>
+    <div id="aout"></div>
+  </section>
+
+  <section id="search" hidden>
     <div class="row">
       <input id="q" placeholder="what do you need done?" autocomplete="off">
       <button id="go">Search</button>
@@ -154,6 +163,45 @@ async function mcp(name, args) {
   const block = body.result?.content?.[0]?.text;
   if (body.result?.isError) throw new Error(block || "failed");
   try { return JSON.parse(block); } catch { return { raw: block }; }
+}
+
+// ---------------------------------------------------------------- ask
+//
+// The difference between this and the tab beside it is who the answer is for.
+// "Find a tool" returns a capability, which is what an agent wants. This
+// returns a sentence, which is what a person asking a question wants — and
+// asking for one and being handed the other was the complaint that produced it.
+$("#ago").onclick = ask;
+$("#aq").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+
+async function ask() {
+  const q = $("#aq").value.trim();
+  if (!q) return;
+  const out = $("#aout");
+  $("#ago").disabled = true;
+  out.innerHTML = `<div class="empty">Thinking…</div>`;
+  try {
+    const d = await mcp("endless_answer", { question: q });
+    if (!d.tool_id) {
+      out.innerHTML = `<div class="note bad"><b>Nothing here can do that.</b><br>${esc(d.answer ?? "")}
+        <br><br>When enough separate people ask for the same thing, it becomes a candidate to build.</div>`;
+    } else {
+      out.innerHTML = `
+        <div class="card">
+          <p style="margin:0 0 10px;font-size:1rem;line-height:1.6">${esc(d.answer ?? "")}</p>
+          <div class="meta">answered by ${esc(d.tool_name ?? d.tool_id)}${d.ms ? " · " + esc(d.ms) + "ms" : ""}</div>
+          ${d.error ? `<div class="note bad" style="margin-top:10px">${esc(d.error)}</div>` : ""}
+          ${d.result != null ? `<details style="margin-top:10px">
+            <summary style="font-size:.78rem;color:var(--dim);cursor:pointer">what it actually ran, and what came back</summary>
+            <pre style="margin-top:8px">${esc(JSON.stringify({ input: d.input, result: d.result }, null, 2))}</pre>
+          </details>` : ""}
+        </div>`;
+    }
+  } catch (e) {
+    out.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+  } finally {
+    $("#ago").disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------- search
@@ -308,9 +356,9 @@ let loaded = {};
 document.querySelectorAll("[role=tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll("[role=tab]").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
-    for (const id of ["search", "gaps", "tools"]) $("#" + id).hidden = id !== btn.dataset.tab;
+    for (const id of ["ask", "search", "gaps", "tools"]) $("#" + id).hidden = id !== btn.dataset.tab;
     const t = btn.dataset.tab;
-    if (t !== "search" && !loaded[t]) {
+    if (t !== "search" && t !== "ask" && !loaded[t]) {
       loaded[t] = true;
       board(t === "gaps" ? "gaps" : "tools", $("#" + t), t === "gaps" ? renderGaps : renderTools);
     }

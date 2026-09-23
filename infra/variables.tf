@@ -109,6 +109,18 @@ variable "app_desired_count" {
   default     = 1
 }
 
+variable "answer_model_id" {
+  description = "The model behind answer-fn, which reads a question into a tool's arguments and then describes what came back. Two calls per question at low effort — neither is a reasoning problem, and the judge already demonstrated what adaptive thinking costs on a hot path. A cheaper model would very likely do both jobs; this matches the judge for now so there is one model to reason about, not two."
+  type        = string
+  default     = "claude-opus-5"
+}
+
+variable "answer_timeout_ms" {
+  description = "Request timeout on each model call in answer-fn. Two of these plus a 30s tool run must stay inside the function's 90s timeout, because the fail-soft path cannot run when the Lambda itself is killed — which is how the judge once returned no body at all."
+  type        = number
+  default     = 20000
+}
+
 variable "app_allowed_cidrs" {
   description = <<-EOT
     Who may reach the app. A list, because the app carries a key and there is
