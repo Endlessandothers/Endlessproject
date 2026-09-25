@@ -152,8 +152,8 @@ variable "app_allowed_cidrs" {
   EOT
   type        = list(string)
   default = [
-    "109.157.66.87/32", # laptop, home broadband
-    "85.255.237.7/32",  # phone, mobile — expect this to rotate
+    "109.157.66.87/32",  # laptop, home broadband
+    "185.69.145.205/32", # phone, mobile — rotated from 85.255.237.7 within two days
   ]
 }
 
