@@ -153,7 +153,7 @@ variable "app_allowed_cidrs" {
   type        = list(string)
   default = [
     "109.181.245.207/32", # laptop — home broadband rotated too, from 109.157.66.87
-    "185.69.145.205/32",  # phone, mobile — rotated from 85.255.237.7 within two days
+    "85.255.233.222/32",  # phone, mobile — third address in four days
   ]
 }
 
