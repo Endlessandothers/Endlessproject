@@ -1,9 +1,15 @@
-# A container with nothing in it but Node and two files.
+# A container with Node, two pages, and one vendored library.
 #
-# No dependencies, so no lockfile, no install step and no supply chain: the app
-# uses node:http and the global fetch that Node 22 already has. The smallest
-# thing that can be reviewed is the smallest thing that can be trusted, and this
-# one is a server and a page.
+# NO INSTALL STEP, STILL. The server uses node:http and the global fetch Node 22
+# already has, so there is no package.json here and nothing is fetched at build
+# time. That was the whole claim and it still holds for the server.
+#
+# It no longer holds for the page. public/vendor/three.module.js is a copy of
+# three.js, checked in rather than pulled from a CDN at load: the page's CSP
+# says script-src 'self', and relaxing that on a page that carries an API key is
+# a bad trade for saving two megabytes of transfer. Vendoring moves the supply
+# chain from "trust a CDN on every page load" to "trust a file somebody can read
+# in the diff", which is the direction this project prefers to move things.
 FROM node:22-alpine
 
 # Runs as the node user, not root. The container holds no credentials and needs

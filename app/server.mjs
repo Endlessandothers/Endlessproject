@@ -106,7 +106,12 @@ const server = createServer(async (req, res) => {
     // Two pages, one server. The world is the same data as the plain page —
     // same board files, same MCP calls — drawn as somewhere you travel rather
     // than a list you scroll. Neither is the "real" one.
-    const PAGES = { "/": "index.html", "/index.html": "index.html", "/world": "world.html" };
+    const PAGES = {
+      "/": "index.html", "/index.html": "index.html",
+      "/world": "world.html",   // the 3D cockpit
+      "/flat": "flat.html",     // the 2D map it grew out of, kept because it
+                                // loads on anything and needs no WebGL
+    };
     if (PAGES[url.pathname]) {
       const html = await readFile(join(HERE, "public", PAGES[url.pathname]), "utf8");
       res.writeHead(200, {
@@ -124,6 +129,34 @@ const server = createServer(async (req, res) => {
     // Deliberately separate from /health, which ECS reads and which should not
     // change shape for our convenience.
     if (url.pathname === "/api/config") return json(res, 200, { holds_key: Boolean(OWN_KEY) });
+
+    // Vendored libraries, served from our own origin.
+    //
+    // three.js is on the page because the cockpit is real 3D now, and it is
+    // COPIED IN rather than pulled from a CDN. The page's own CSP says
+    // script-src 'self', which a CDN would break — and relaxing that to load a
+    // graphics library onto a page that holds an API key is a bad trade for
+    // saving 2MB of image. It also means the thing works with no third party
+    // up, which is the same argument the rest of this project makes.
+    if (url.pathname.startsWith("/vendor/") && url.pathname.endsWith(".js")) {
+      const name = url.pathname.slice("/vendor/".length);
+      // No slashes, no dots: the only thing a traversal could reach here is a
+      // .js file, but "only" is doing too much work in that sentence.
+      if (!/^[a-z0-9._-]+$/i.test(name) || name.includes("..")) {
+        return json(res, 400, { error: "bad asset name" });
+      }
+      try {
+        const js = await readFile(join(HERE, "public", "vendor", name), "utf8");
+        res.writeHead(200, {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "public, max-age=604800, immutable",
+          "x-content-type-options": "nosniff",
+        });
+        return res.end(js);
+      } catch {
+        return json(res, 404, { error: "not found" });
+      }
+    }
 
     // The public board. No key needed and none forwarded — it is the same
     // object anyone can fetch from CloudFront.

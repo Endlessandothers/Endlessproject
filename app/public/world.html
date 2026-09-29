@@ -2,251 +2,334 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Endless — the world</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Endless — the cockpit</title>
 <style>
-  :root{
-    --bg:#07070c; --ink:#ececf0; --dim:#8a8a99; --line:#23232e;
-    --accent:#ED7100; --dust:#c98a3a;
-  }
+  :root{ --accent:#ED7100; --hud:rgba(255,190,120,.85); --dim:rgba(160,150,145,.6); --dust:#c98a3a; }
   *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--ink);overflow:hidden;
-       font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  html,body{height:100%;overflow:hidden}
+  body{margin:0;background:#04040a;color:#ececf0;
+       font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+       -webkit-user-select:none;user-select:none}
   canvas{display:block;position:fixed;inset:0;touch-action:none}
 
-  .hud{position:fixed;top:0;left:0;right:0;padding:16px;pointer-events:none;
-       display:flex;flex-direction:column;gap:10px}
-  .hud > *{pointer-events:auto}
-  .bar{display:flex;gap:8px;align-items:center;max-width:640px;width:100%}
-  .bar input{flex:1;min-width:0;padding:11px 14px;border-radius:10px;
-    border:1px solid var(--line);background:rgba(12,12,20,.86);color:var(--ink);
-    font:inherit;backdrop-filter:blur(8px)}
-  .bar input::placeholder{color:var(--dim)}
-  .bar button{padding:11px 18px;border-radius:10px;border:0;background:var(--accent);
-    color:#fff;font:inherit;font-weight:650;cursor:pointer;white-space:nowrap}
-  .bar button:disabled{opacity:.45;cursor:default}
-  .status{font-size:.8rem;color:var(--accent);min-height:1.2em;pointer-events:none;
-          text-shadow:0 0 18px rgba(237,113,0,.5)}
+  /* ---------------------------------------------------------------- canopy
+     The hull, drawn over the glass. It catches nothing: a frame that ate a tap
+     meant for a world behind it would be a cockpit you cannot fly. */
+  .canopy{position:fixed;inset:0;pointer-events:none;z-index:4}
+  .canopy .glass{position:absolute;inset:0;
+    background:
+      radial-gradient(ellipse 120% 90% at 50% 46%, transparent 40%, rgba(0,0,0,.82) 100%),
+      linear-gradient(180deg, rgba(255,150,60,.05) 0%, transparent 22%)}
+  /* The struts. Real canopies have them, and they are most of why a view reads
+     as "from inside something" rather than "a camera in space". */
+  .strut.l{position:absolute;left:0;top:0;bottom:0;width:15vw;
+    background:linear-gradient(90deg,rgba(20,16,15,.96) 0%,rgba(24,19,17,.7) 55%,transparent 100%)}
+  .strut.r{position:absolute;right:0;top:0;bottom:0;width:15vw;
+    background:linear-gradient(270deg,rgba(20,16,15,.96) 0%,rgba(24,19,17,.7) 55%,transparent 100%)}
+  .strut.t{position:absolute;left:0;right:0;top:0;height:9vh;
+    background:linear-gradient(180deg,rgba(18,14,13,.97) 0%,rgba(22,17,16,.55) 60%,transparent 100%)}
+  /* The dash. The bottom of the frame is the console, so it is heavier and has
+     a lit edge where instruments would throw light up onto the glass. */
+  .dash{position:absolute;left:0;right:0;bottom:0;height:19vh;
+    background:linear-gradient(0deg,#0b0908 0%,#151110 58%,rgba(24,19,17,.72) 88%,transparent 100%);
+    border-top:1px solid rgba(237,113,0,.30);
+    box-shadow:0 -14px 46px rgba(237,113,0,.09)}
+  .dash:after{content:"";position:absolute;left:8%;right:8%;top:-1px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,190,120,.6),transparent)}
 
-  .title{position:fixed;top:0;right:0;padding:18px 20px;text-align:right;
-         font-size:.76rem;color:var(--dim);line-height:1.7;pointer-events:none}
-  .title b{display:block;font-size:1rem;color:var(--ink);letter-spacing:-.01em}
-  .title b span{color:var(--accent)}
-  .title a{color:var(--dim);pointer-events:auto}
+  /* ---------------------------------------------------------------- readouts */
+  .hud{position:fixed;z-index:6;pointer-events:none;
+    font:11px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--hud);
+    text-shadow:0 0 12px rgba(237,113,0,.45)}
+  .hud .lbl{color:var(--dim);letter-spacing:.14em}
+  .hud b{font-weight:600;color:#ffe2bd}
+  #hudL{left:calc(2vw + 10px);bottom:4.5vh}
+  #hudR{right:calc(2vw + 10px);bottom:4.5vh;text-align:right}
+  .bar{width:104px;height:3px;background:rgba(255,190,120,.16);border-radius:2px;margin-top:3px}
+  .bar i{display:block;height:100%;width:0;background:var(--hud);border-radius:2px;
+    box-shadow:0 0 9px rgba(255,190,120,.8);transition:width .12s linear}
+  #hudR .bar{margin-left:auto}
 
-  .panel{position:fixed;left:16px;bottom:16px;width:min(420px,calc(100vw - 32px));
-    background:rgba(12,12,20,.92);border:1px solid var(--line);border-radius:14px;
+  /* ---------------------------------------------------------------- console */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:5.2vh;z-index:7;
+    width:min(560px,80vw);display:flex;flex-direction:column;gap:7px;align-items:center}
+  .ask{display:flex;gap:7px;width:100%}
+  .ask input{flex:1;min-width:0;padding:11px 15px;border-radius:9px;
+    border:1px solid rgba(237,113,0,.34);background:rgba(10,8,10,.88);color:#ffe2bd;
+    font:13px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em;
+    box-shadow:inset 0 0 22px rgba(237,113,0,.07)}
+  .ask input::placeholder{color:rgba(160,150,145,.55)}
+  .ask input:focus{outline:0;border-color:rgba(255,190,120,.75)}
+  .ask button{padding:11px 19px;border-radius:9px;border:1px solid rgba(237,113,0,.5);
+    background:rgba(237,113,0,.9);color:#140d06;font:600 12px/1 ui-monospace,monospace;
+    letter-spacing:.13em;text-transform:uppercase;cursor:pointer}
+  .ask button:disabled{opacity:.4;cursor:default}
+  .status{font:11px/1.5 ui-monospace,monospace;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--hud);min-height:1.3em;text-align:center;text-shadow:0 0 14px rgba(237,113,0,.5)}
+
+  /* ---------------------------------------------------------------- panel */
+  .panel{position:fixed;left:50%;transform:translateX(-50%) translateY(calc(100% + 60px));
+    bottom:calc(5.2vh + 92px);width:min(560px,86vw);max-height:54vh;overflow:auto;z-index:8;
+    background:rgba(9,8,12,.95);border:1px solid rgba(237,113,0,.3);border-radius:13px;
     padding:16px 18px;backdrop-filter:blur(10px);
-    transform:translateY(calc(100% + 30px));transition:transform .45s cubic-bezier(.2,.8,.2,1)}
-  .panel.up{transform:none}
-  .panel h2{margin:0 0 2px;font-size:1.02rem}
-  .panel .sub{color:var(--dim);font-size:.83rem;margin:0 0 10px}
-  .panel .desc{font-size:.87rem;color:#bfbfcc;margin:0 0 12px}
-  .stats{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--dim);
-         font-variant-numeric:tabular-nums;margin-bottom:12px}
-  .stats b{color:var(--ink);font-weight:650}
-  .panel input.args{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
-    background:#0b0b13;color:var(--ink);font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
-  .fields{display:grid;gap:9px;margin-top:4px}
-  .fields label{display:block;font-size:.74rem;color:var(--dim);margin-bottom:3px}
-  .fields label b{color:var(--ink);font-weight:600;font-size:.8rem;
-    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-  .fields label .req{color:var(--accent);margin-left:3px}
-  .fields input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
-    background:#0b0b13;color:var(--ink);font:13px ui-sans-serif,system-ui,sans-serif}
-  .fields input:focus{outline:0;border-color:var(--accent)}
-  .nofields{font-size:.82rem;color:var(--dim);margin:2px 0 0}
-  .panel .row{display:flex;gap:8px;margin-top:10px}
-  .panel button{padding:9px 15px;border-radius:8px;border:0;background:var(--accent);
-    color:#fff;font:inherit;font-weight:600;cursor:pointer}
-  .panel button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
-  pre{margin:12px 0 0;max-height:32vh;overflow:auto;background:#0b0b13;border:1px solid var(--line);
-      border-radius:8px;padding:11px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
-      color:#b9d8c6;white-space:pre-wrap;word-break:break-word}
-  .answer{font-size:1rem;line-height:1.6;color:var(--ink);margin:0 0 12px}
-  .via{font-size:.74rem;color:var(--dim);margin:0 0 10px}
-  .via b{color:var(--accent);font-weight:600}
-  details{margin-top:10px}
-  details summary{font-size:.76rem;color:var(--dim);cursor:pointer;list-style:none}
-  details summary::-webkit-details-marker{display:none}
-  details summary:before{content:"▸ ";color:var(--accent)}
-  details[open] summary:before{content:"▾ "}
-  .gapnote{border-left:3px solid var(--dust);padding-left:12px;color:var(--dust);font-size:.86rem}
-  .gapnote ul{margin:6px 0 0;padding-left:18px;color:var(--dim)}
+    box-shadow:0 0 40px rgba(0,0,0,.7), inset 0 0 40px rgba(237,113,0,.05);
+    transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+  .panel.up{transform:translateX(-50%) translateY(0)}
+  .panel .q{font:11px/1.6 ui-monospace,monospace;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--dim);margin:0 0 8px}
+  .panel .a{font-size:.97rem;line-height:1.62;margin:0 0 11px;color:#f0eae4}
+  .panel .via{font:10px/1.6 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);margin:0}
+  .panel .via b{color:var(--hud)}
+  .panel .gap{border-left:2px solid var(--dust);padding-left:11px;color:var(--dust);font-size:.87rem}
+  details{margin-top:11px}
+  summary{font:10px/1.6 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);cursor:pointer;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary:before{content:"> ";color:var(--accent)}
+  details[open] summary:before{content:"v ";color:var(--accent)}
+  pre{margin:8px 0 0;background:#070609;border:1px solid rgba(237,113,0,.16);border-radius:7px;
+    padding:10px;font:11px/1.55 ui-monospace,monospace;color:#b9d8c6;
+    white-space:pre-wrap;word-break:break-word;max-height:26vh;overflow:auto}
+  .panel .row{display:flex;gap:7px;margin-top:11px}
+  .panel .row button{padding:8px 14px;border-radius:7px;border:1px solid rgba(237,113,0,.4);
+    background:transparent;color:var(--hud);font:11px ui-monospace,monospace;
+    letter-spacing:.09em;text-transform:uppercase;cursor:pointer}
 
-  /* THE CANOPY. Drawn over everything, catching nothing: the glass is not a
-     control, so it must never eat a click meant for a world behind it. */
-  .canopy{position:fixed;inset:0;pointer-events:none;z-index:5}
-  .canopy .vig{position:absolute;inset:0;
-    background:radial-gradient(ellipse at 50% 50%, transparent 46%, rgba(0,0,0,.55) 100%)}
-  .canopy .frame{position:absolute;inset:14px;border-radius:26px;
-    border:1px solid rgba(237,113,0,.16);
-    box-shadow:inset 0 0 90px rgba(237,113,0,.05)}
-  .canopy .corner{position:absolute;width:26px;height:26px;border:2px solid rgba(237,113,0,.5)}
-  .canopy .tl{top:22px;left:22px;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
-  .canopy .tr{top:22px;right:22px;border-left:0;border-bottom:0;border-radius:0 8px 0 0}
-  .canopy .bl{bottom:22px;left:22px;border-right:0;border-top:0;border-radius:0 0 0 8px}
-  .canopy .br{bottom:22px;right:22px;border-left:0;border-top:0;border-radius:0 0 8px 0}
+  .brand{position:fixed;top:2.4vh;left:50%;transform:translateX(-50%);z-index:6;
+    font:11px/1.6 ui-monospace,monospace;letter-spacing:.3em;text-transform:uppercase;
+    color:rgba(255,190,120,.5);pointer-events:none;text-align:center}
+  .brand a{color:rgba(160,150,145,.55);pointer-events:auto;letter-spacing:.1em;text-decoration:none}
 
-  .readout{position:fixed;z-index:6;pointer-events:none;
-    font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
-    letter-spacing:.06em;text-transform:uppercase;color:rgba(237,113,0,.78)}
-  .readout b{color:#ffd9a8;font-weight:600}
-  .readout .lbl{color:rgba(160,150,145,.65)}
-  #hud-l{left:26px;top:50%;transform:translateY(-50%)}
-  #hud-r{right:26px;top:50%;transform:translateY(-50%);text-align:right}
-  @media (max-width:700px){ #hud-l,#hud-r{top:auto;bottom:96px;transform:none;font-size:10px}
-    #hud-r{right:26px} }
+  .boot{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#04040a;
+    font:12px ui-monospace,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--hud);
+    transition:opacity .6s}
+  .boot.gone{opacity:0;pointer-events:none}
 
-  .legend{position:fixed;left:16px;bottom:16px;font-size:.72rem;color:var(--dim);
-    background:rgba(12,12,20,.8);border:1px solid var(--line);border-radius:12px;
-    padding:11px 14px;backdrop-filter:blur(8px);line-height:1.9;transition:opacity .3s}
-  .legend.hide{opacity:0;pointer-events:none}
-  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:-1px}
-  @media (max-width:560px){ .legend{display:none} .title{font-size:.7rem;padding:14px} }
+  @media (max-width:640px){
+    .strut.l,.strut.r{width:9vw}
+    .hud{font-size:10px}
+    #hudL,#hudR{bottom:3.4vh}
+    .console{bottom:4vh;width:88vw}
+    .brand{font-size:9px}
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 
-<div class="title">
-  <b>End<span>less</span> — the world</b>
-  every tool a place · <a href="/">back to the plain page</a>
+<div class="canopy">
+  <div class="glass"></div>
+  <div class="strut t"></div>
+  <div class="strut l"></div>
+  <div class="strut r"></div>
+  <div class="dash"></div>
 </div>
 
-<div class="hud">
-  <div class="bar">
-    <input id="q" placeholder="ask a question — how strong is charizard?" autocomplete="off" spellcheck="false">
+<div class="brand">ENDLESS<br><a href="/">plain page</a> · <a href="/flat">flat map</a></div>
+
+<div class="hud" id="hudL">
+  <div class="lbl">tether</div>
+  <div><b id="tState">MOORED</b></div>
+  <div class="lbl">range to claude</div>
+  <div><b id="tRange">0</b></div>
+  <div class="bar"><i id="tBar"></i></div>
+</div>
+
+<div class="hud" id="hudR">
+  <div class="lbl">heading</div>
+  <div><b id="tTarget">HOLDING</b></div>
+  <div class="lbl">velocity</div>
+  <div><b id="tVel">0</b></div>
+  <div class="bar"><i id="vBar"></i></div>
+</div>
+
+<div class="console">
+  <div class="ask">
+    <input id="q" placeholder="ask anything — how strong is charizard?" autocomplete="off" spellcheck="false">
     <button id="go">Ask</button>
   </div>
   <div class="status" id="status"></div>
 </div>
 
-<div class="legend" id="legend">
-  <div><i style="background:#000;border:1px solid #ffc06a;box-shadow:0 0 12px #ED7100"></i> the centre — Claude. Questions fall in; only what it cannot answer comes back out</div>
-  <div><i style="background:#ED7100;box-shadow:0 0 10px #ED7100"></i> lit — called, and it worked</div>
-  <div><i style="background:#3a3a4a"></i> unlit — never called, so nothing is known</div>
-  <div><i style="background:#c98a3a;opacity:.6"></i> dust — a need nobody met</div>
-  <div style="opacity:.7;margin-top:4px">size is use · moons are tools built on it</div>
-  <div style="opacity:.7">used tools orbit close and fast · unused ones drift out and slow</div>
-</div>
-
-<div class="canopy">
-  <div class="vig"></div>
-  <div class="frame"></div>
-  <div class="corner tl"></div><div class="corner tr"></div>
-  <div class="corner bl"></div><div class="corner br"></div>
-</div>
-
-<div class="readout" id="hud-l">
-  <div class="lbl">tether</div>
-  <div><b id="t-state">MOORED</b></div>
-  <div class="lbl">range to claude</div>
-  <div><b id="t-range">0</b></div>
-</div>
-
-<div class="readout" id="hud-r">
-  <div class="lbl">heading</div>
-  <div><b id="t-target">HOLDING</b></div>
-  <div class="lbl">velocity</div>
-  <div><b id="t-vel">0</b></div>
-</div>
-
 <div class="panel" id="panel"></div>
+<div class="boot" id="boot">bringing systems up…</div>
 
-<script>
+<script type="module">
+// THE COCKPIT, IN REAL 3D.
+//
+// This was a top-down canvas with a triangle flying across it, then the same
+// canvas with the camera riding the triangle. Both were maps you looked at.
+// This is a place you sit inside: a perspective camera behind a canopy, a black
+// hole with real depth ahead of you, and tools on real inclined orbits you fly
+// out to and come back from.
+//
+// WHY NOT UNREAL. It was asked for, and it is the wrong tool rather than a
+// missing one. Unreal has had no browser target since HTML5 export was removed
+// after 4.24, so the only way onto a web page is Pixel Streaming: render on a
+// GPU server, send video. The smallest suitable AWS instance is around $380 a
+// month against $0 here, it needs a session per viewer, and a phone on mobile
+// data would get a laggy video of a cockpit rather than a cockpit. three.js
+// renders on the device already in your hand.
+//
+// three.js is COPIED IN rather than loaded from a CDN, because this page's CSP
+// says script-src 'self', and relaxing that on a page that holds an API key is
+// a bad trade for saving two megabytes of transfer.
+
+import * as T from "/vendor/three.module.js";
+
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const TAU = Math.PI * 2;
 const lerp = (a, b, t) => a + (b - a) * t;
-// Starts and ends at rest, so it reads as a journey rather than a jump.
 const ease = (t) => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
 
-// A stable number per tool id, so a world keeps its place and its colour
-// between visits. A map that reshuffles on reload is a map you cannot learn.
+// A stable number per tool id, so a world keeps its orbit and its colour
+// between visits. A system that reshuffles on reload is one you cannot learn.
 function hash(str) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
   return (h >>> 0);
 }
 
-const canvas = $("#c"), ctx = canvas.getContext("2d");
-let W = 0, H = 0, DPR = 1;
-function resize() {
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth; H = window.innerHeight;
-  canvas.width = W * DPR; canvas.height = H * DPR;
-  canvas.style.width = W + "px"; canvas.style.height = H + "px";
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-}
-resize();
-addEventListener("resize", resize);
+// ---------------------------------------------------------------- scene
+const renderer = new T.WebGLRenderer({ canvas: $("#c"), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x04040a, 1);
 
-// THE CAMERA IS THE SHIP NOW.
-//
-// It used to be an overhead eye that eased toward whatever a probe was flying
-// at, with the probe drawn as a little triangle. You watched the journey. In a
-// cockpit you take it: the camera sits exactly where the ship is, and `rot` is
-// its heading, so the world turns around you rather than you sliding across it.
-//
-// Labels are still drawn upright, because they are placed at screen positions
-// after the rotation rather than inside it. A readable name is worth more than
-// the consistency of tipping it over with everything else.
-const cam = { x: 0, y: 0, z: 1, rot: 0, tx: 0, ty: 0, tz: 1, trot: 0 };
-const stars = Array.from({ length: 220 }, () => ({
-  x: (Math.random() - .5) * 3200, y: (Math.random() - .5) * 3200,
-  r: Math.random() * 1.1 + .25, tw: Math.random() * TAU, depth: .25 + Math.random() * .5,
-}));
+const scene = new T.Scene();
+const camera = new T.PerspectiveCamera(62, innerWidth / innerHeight, 0.5, 20000);
 
-let bodies = [], gaps = [];
-const home = { x: 0, y: 0 };
-const dust = [];   // transient particles: a record being written
-let probe = null;  // the ride
-let hovered = null, selected = null;
-let homePulse = 0;   // the centre flaring when it answers on its own
+// PARKED CLOSE. The hole should fill the glass the moment the page opens — it
+// is the thing everything else is about, and a distant speck would make it
+// scenery. This is the mooring the ship returns to.
+const MOORING = new T.Vector3(0, 13, 62);
+camera.position.copy(MOORING);
 
-// THE ACCRETION DISC. Matter that fell in and has not finished falling.
-//
-// Flattened rather than circular because a disc seen from slightly above is
-// what makes the shape read as a black hole rather than as a ring, and the
-// inner edge is brighter because it is moving faster and is closer to the
-// horizon. Doppler asymmetry — one side brighter than the other — is what sells
-// it; a symmetric disc looks like a logo.
-const disc = Array.from({ length: 190 }, () => {
-  const r = 32 + Math.pow(Math.random(), .62) * 50;
-  return {
-    a: Math.random() * TAU, r,
-    rate: 0.055 / Math.pow(r / 32, 1.5),   // Keplerian: the inner edge tears round
-    w: .5 + Math.random() * .8,
-    ph: Math.random() * TAU,
-  };
+scene.add(new T.AmbientLight(0x3a3a52, 1.2));
+const keyLight = new T.PointLight(0xffb066, 1400, 2600, 2);
+scene.add(keyLight);                       // the hole lights its own system
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
 });
 
-// Heading is applied as a rotation about the ship. -rot on the way out, +rot on
-// the way back, so a click still lands on the thing under the cursor.
-const screenOf = (p) => {
-  const dx = (p.x - cam.x) * cam.z, dy = (p.y - cam.y) * cam.z;
-  const c = Math.cos(-cam.rot), sn = Math.sin(-cam.rot);
-  return { x: dx * c - dy * sn + W / 2, y: dx * sn + dy * c + H / 2 };
-};
-const world = (sx, sy) => {
-  const dx = sx - W / 2, dy = sy - H / 2;
-  const c = Math.cos(cam.rot), sn = Math.sin(cam.rot);
-  return { x: (dx * c - dy * sn) / cam.z + cam.x, y: (dx * sn + dy * c) / cam.z + cam.y };
-};
-
-// The shortest way round. Easing a heading from 350 to 10 degrees the long way
-// spins the whole world through 340 of them, which is nauseating and wrong.
-const angleTo = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
-
-function makeMotes(n, spread) {
-  return Array.from({ length: n }, () => ({
-    a: Math.random() * TAU, d: 14 + Math.random() * spread,
-    rate: (.0004 + Math.random() * .0011) * (Math.random() < .5 ? -1 : 1),
-    r: .6 + Math.random() * 1.4, ph: Math.random() * TAU,
-  }));
+// ---------------------------------------------------------------- starfield
+{
+  const N = 2600, pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    // On a shell rather than in a cube, so there is no direction you can turn
+    // and catch the sky running out.
+    const u = Math.random() * 2 - 1, th = Math.random() * TAU, r = 2600 + Math.random() * 3200;
+    const k = Math.sqrt(1 - u * u);
+    pos[i*3] = Math.cos(th) * k * r; pos[i*3+1] = u * r; pos[i*3+2] = Math.sin(th) * k * r;
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute("position", new T.BufferAttribute(pos, 3));
+  scene.add(new T.Points(g, new T.PointsMaterial({
+    color: 0xcfd4ff, size: 7, sizeAttenuation: true, transparent: true, opacity: .85,
+  })));
 }
+
+// ---------------------------------------------------------------- glow sprite
+const glowTex = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const x = c.getContext("2d");
+  const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, "rgba(255,255,255,.95)");
+  g.addColorStop(.28, "rgba(255,190,120,.45)");
+  g.addColorStop(1, "rgba(237,113,0,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  return new T.CanvasTexture(c);
+})();
+
+// ---------------------------------------------------------------- black hole
+const HORIZON = 7;
+const hole = new T.Group();
+scene.add(hole);
+
+// The horizon. Pure black and unlit, so it stays a HOLE rather than becoming a
+// dark ball with a highlight sliding over it.
+hole.add(new T.Mesh(new T.SphereGeometry(HORIZON, 48, 32),
+  new T.MeshBasicMaterial({ color: 0x000000 })));
+
+// The photon ring: light that orbited before it escaped. Thin, and the
+// brightest thing in here, because it is.
+const photon = new T.Mesh(
+  new T.TorusGeometry(HORIZON * 1.07, .13, 12, 160),
+  new T.MeshBasicMaterial({ color: 0xffe0b2, transparent: true, opacity: .95,
+    blending: T.AdditiveBlending, depthWrite: false }));
+photon.rotation.x = Math.PI / 2;
+hole.add(photon);
+
+// The accretion disc as PARTICLES rather than a textured ring, because the
+// inner edge has to visibly outrun the outer one and a rigid mesh cannot do
+// that. Kepler again: angular speed falls off as r^-1.5.
+const DISC_N = 5200;
+const discPos = new Float32Array(DISC_N * 3);
+const discCol = new Float32Array(DISC_N * 3);
+const discDat = new Float32Array(DISC_N * 3);   // r, angle, rate
+{
+  const cIn = new T.Color(0xfff4e6), cMid = new T.Color(0xffb257), cOut = new T.Color(0xb8490a);
+  for (let i = 0; i < DISC_N; i++) {
+    const r = HORIZON * 1.32 + Math.pow(Math.random(), .58) * HORIZON * 4.4;
+    const a = Math.random() * TAU;
+    discDat[i*3] = r; discDat[i*3+1] = a;
+    discDat[i*3+2] = 2.4 / Math.pow(r / (HORIZON * 1.32), 1.5);
+    const heat = 1 - Math.min(1, (r - HORIZON * 1.32) / (HORIZON * 4.4));
+    const c = heat > .55 ? cIn.clone().lerp(cMid, (1 - heat) / .45)
+                         : cMid.clone().lerp(cOut, (.55 - heat) / .55);
+    discCol[i*3] = c.r; discCol[i*3+1] = c.g; discCol[i*3+2] = c.b;
+  }
+}
+const discGeo = new T.BufferGeometry();
+discGeo.setAttribute("position", new T.BufferAttribute(discPos, 3));
+discGeo.setAttribute("color", new T.BufferAttribute(discCol, 3));
+hole.add(new T.Points(discGeo, new T.PointsMaterial({
+  size: .55, vertexColors: true, transparent: true, opacity: .95,
+  blending: T.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+})));
+
+const glow = new T.Sprite(new T.SpriteMaterial({
+  map: glowTex, blending: T.AdditiveBlending, depthWrite: false, transparent: true,
+  color: 0xffa347,
+}));
+glow.scale.set(HORIZON * 10, HORIZON * 10, 1);
+hole.add(glow);
+
+// ---------------------------------------------------------------- labels
+function labelSprite(text, colour, px) {
+  const size = px ?? 42, pad = 14;
+  const m = document.createElement("canvas").getContext("2d");
+  m.font = `600 ${size}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  const w = Math.ceil(m.measureText(text).width) + pad * 2;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = size + 22;
+  const g = c.getContext("2d");
+  g.font = `600 ${size}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  g.textBaseline = "middle";
+  g.shadowColor = "rgba(0,0,0,.95)"; g.shadowBlur = 10;
+  g.fillStyle = colour;
+  g.fillText(text, pad, c.height / 2);
+  const tex = new T.CanvasTexture(c);
+  tex.minFilter = T.LinearFilter;
+  const sp = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(w / c.height * 10, 10, 1);
+  return sp;
+}
+
+// ---------------------------------------------------------------- the worlds
+const bodies = [];
+const gapClouds = [];
+const home = new T.Vector3(0, 0, 0);
+
+const bodyPos = (b) => new T.Vector3(
+  Math.cos(b.a) * b.R, Math.sin(b.inc) * b.R * .32, Math.sin(b.a) * b.R);
 
 async function load() {
   const [tj, gj] = await Promise.all([
@@ -256,635 +339,272 @@ async function load() {
 
   const tools = tj.tools ?? [];
   const maxMass = Math.max(1, ...tools.map(t => t.live_mass ?? 0));
-
-  // Busy at the centre, quiet at the rim. Not decoration: decay moves a tool
-  // outward as it stops being called, so the drift itself is the story.
   const sorted = [...tools].sort((a, b) => (b.live_mass ?? 0) - (a.live_mass ?? 0));
-  bodies = sorted.map((t, i) => {
+
+  sorted.forEach((t, i) => {
     const h = hash(t.tool_id);
-    const a = i * 2.39996 + ((h % 1000) / 1000) * .55;       // golden angle: no clumping
     const busy = Math.min(1, (t.live_mass ?? 0) / maxMass);
-    const jitter = .72 + ((h >> 9) % 1000) / 1000 * .46;
-    const r = lerp(190, 700, Math.pow(1 - busy, .85)) * jitter;
+    const jitter = .74 + ((h >> 9) % 1000) / 1000 * .44;
+    // Busy close in, quiet far out. Radius already encoded use, and decay
+    // already pushes an unused tool outward — so the orbit a tool ends up in
+    // IS its standing rather than a decoration laid over the data.
+    const R = lerp(100, 380, Math.pow(1 - busy, .85)) * jitter;
+    const a = i * 2.39996 + ((h % 1000) / 1000) * .5;
+    // A little inclination each, so this is a system rather than a dinner
+    // plate, and reaching one means climbing as well as travelling.
+    const inc = ((h >> 4) % 1000) / 1000 * .36 - .18;
+
     const lit = t.brightness != null && (t.mass ?? 0) > 0;
-    return {
-      ...t,
-      // EVERYTHING ORBITS, AND KEPLER DOES THE ARGUING.
-      //
-      // Orbital speed falls off as r^-1.5, so a tool that is used sits close in
-      // and visibly swings round, while one nothing has called drifts far out
-      // and is nearly still. That is not decoration layered on top of the data:
-      // radius already encodes use, and decay already pushes an unused tool
-      // outward, so the orbit it ends up in IS its standing. A busy tool looks
-      // alive because it is.
-      orbitR: r, orbitA: a,
-      orbitRate: 110 / Math.pow(r, 1.5),
-      x: Math.cos(a) * r, y: Math.sin(a) * r,
-      radius: 10 + Math.sqrt(t.live_mass ?? 0) * 7,
-      hue: (h >> 3) % 360, lit, glow: lit ? t.brightness : 0,
-      spin: ((h >> 5) % 100) / 100 * TAU, spinRate: .00018 + ((h >> 11) % 60) / 900000,
-      moons: Array.from({ length: Math.min(t.dependents ?? 0, 4) }, (_, k) => ({
-        id: (t.dependent_tools ?? [])[k], a: ((h >> (k + 2)) % 628) / 100,
-        rate: .0011 - k * .00018,
-      })),
-      pulse: 0,
-    };
-  });
+    const radius = 3.6 + Math.sqrt(t.live_mass ?? 0) * 2.8;
+    const hue = ((h >> 3) % 360) / 360;
 
-  // Gaps sit outside the rim, in the empty space that is the point of them.
-  gaps = (gj.clusters ?? []).map((c) => {
-    const h = hash(c.id);
-    const a = (h % 1000) / 1000 * TAU;
-    const r = 820 + ((h >> 7) % 240);
-    return { ...c, x: Math.cos(a) * r, y: Math.sin(a) * r,
-             motes: makeMotes(c.confirmed ? 46 : 30, c.confirmed ? 30 : 48) };
-  });
-}
+    const mat = lit
+      ? new T.MeshStandardMaterial({
+          color: new T.Color().setHSL(hue, .60, .52),
+          emissive: new T.Color().setHSL(hue, .72, .16 + (t.brightness ?? 0) * .2),
+          roughness: .6, metalness: .12,
+        })
+      // Unlit is its own state, not a dimmer version of lit. Nothing is KNOWN
+      // about whether these work, and drawing "no evidence" the same as "weak
+      // evidence" would be the most misleading thing on the screen.
+      : new T.MeshStandardMaterial({ color: 0x2c2c3a, emissive: 0x08080e, roughness: .95, metalness: .03 });
 
-// ---------------------------------------------------------------- the ride
-//
-// A quadratic arc rather than a straight line: a straight line reads as a state
-// change, an arc reads as a journey — which is the entire reason for drawing
-// this instead of printing a row.
-function launch(target, opts) {
-  beginLeg({ x: home.x, y: home.y }, target, opts.mode);
-  probe = Object.assign(probe, { stops: [], ...opts, target });
-  aimCamera(target, opts.mode);
-}
+    const group = new T.Group();
+    const mesh = new T.Mesh(new T.SphereGeometry(radius, 32, 22), mat);
+    group.add(mesh);
 
-// A TOUR, BECAUSE AN ANSWER CAN COME FROM SEVERAL PLACES.
-//
-// "Compare the air quality in Lisbon and Porto" is two calls to one tool;
-// "which is cleanest of three cities" is three. Drawing one hop for any of
-// those would misreport where the answer came from, and showing the mechanism
-// is the only reason this map exists over a list.
-//
-// Stops are the DISTINCT tools visited. Three calls to air-by-place is one
-// place visited three times, and flying there three times would be theatre.
-function tour(targets, opts) {
-  const [first, ...rest] = targets;
-  beginLeg({ x: home.x, y: home.y }, first, opts.mode);
-  probe = Object.assign(probe, { stops: rest, ...opts, target: first });
-  aimCamera(first, opts.mode);
-}
-
-function aimCamera(target, mode) {
-  // Only the zoom. Position and heading come from the flight itself now — the
-  // ship is not aimed at a destination, it travels to one.
-  cam.tz = mode === "gap" ? 1.0 : 1.35;
-}
-
-// One leg of a journey. A quadratic arc rather than a straight line: a straight
-// line reads as a state change, an arc reads as travel.
-function beginLeg(from, to, mode) {
-  const c = {
-    x: (from.x + to.x) / 2 - (to.y - from.y) * .28,
-    y: (from.y + to.y) / 2 + (to.x - from.x) * .28,
-  };
-  const keep = probe?.trail ?? [];
-  probe = {
-    from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y }, c,
-    t: 0, dur: 900 + Math.min(1400, Math.hypot(to.x - from.x, to.y - from.y) * 1.5),
-    phase: "out", wait: 0, trail: keep, mode,
-    stops: probe?.stops ?? [], onArrive: probe?.onArrive, onDone: probe?.onDone,
-    target: to, visited: probe?.visited ?? [],
-  };
-}
-
-function probePos(p, t) {
-  const u = 1 - t;
-  return { x: u*u*p.from.x + 2*u*t*p.c.x + t*t*p.to.x,
-           y: u*u*p.from.y + 2*u*t*p.c.y + t*t*p.to.y };
-}
-
-function puff(x, y, n, spread, colour) {
-  for (let i = 0; i < n; i++) {
-    const a = Math.random() * TAU, s = Math.random() * spread;
-    dust.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
-      life: 1, decay: .004 + Math.random() * .008,
-      r: 1 + Math.random() * 3.4, colour: colour ?? "201,138,58" });
-  }
-}
-
-function step(dt) {
-  // While flying, the ship's position IS the camera's, hard-set rather than
-  // eased: a cockpit that lags behind its own hull is a camera, not a cockpit.
-  // Everything else still eases, so idling and panning stay soft.
-  if (probe && probe.phase !== "arrive") {
-    const t = ease(probe.t);
-    const pos = probePos(probe, t);
-    const ahead = probePos(probe, Math.min(1, t + .02));
-    cam.x = cam.tx = pos.x;
-    cam.y = cam.ty = pos.y;
-    // Face where you are going. +PI/2 because the canvas has y pointing down
-    // and the cockpit looks up the screen.
-    cam.trot = Math.atan2(ahead.y - pos.y, ahead.x - pos.x) + Math.PI / 2;
-    cam.rot = lerp(cam.rot, angleTo(cam.rot, cam.trot), 1 - Math.pow(.002, dt / 1000));
-  } else {
-    cam.x = lerp(cam.x, cam.tx, 1 - Math.pow(.0022, dt/1000));
-    cam.y = lerp(cam.y, cam.ty, 1 - Math.pow(.0022, dt/1000));
-    cam.rot = lerp(cam.rot, angleTo(cam.rot, cam.trot), 1 - Math.pow(.02, dt / 1000));
-  }
-  cam.z = lerp(cam.z, cam.tz, 1 - Math.pow(.004, dt/1000));
-
-  for (const b of bodies) {
-    b.spin += b.spinRate * dt;
-    b.orbitA += b.orbitRate * dt / 1000;
-    b.x = Math.cos(b.orbitA) * b.orbitR;
-    b.y = Math.sin(b.orbitA) * b.orbitR;
-    for (const m of b.moons) m.a += m.rate * dt;
-    if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - dt / 900);
-  }
-  for (const d of disc) d.a += d.rate * dt / 1000;
-  for (const g of gaps) for (const m of g.motes) m.a += m.rate * dt;
-  if (homePulse > 0) homePulse = Math.max(0, homePulse - dt / 1400);
-
-  for (let i = dust.length - 1; i >= 0; i--) {
-    const d = dust[i];
-    d.x += d.vx * dt / 16; d.y += d.vy * dt / 16;
-    d.vx *= .985; d.vy *= .985;
-    d.life -= d.decay * dt / 16;
-    if (d.life <= 0) dust.splice(i, 1);
-  }
-
-  if (!probe) return;
-  const p = probe;
-  // The destination moves now. Over a two-second flight the drift is small, but
-  // arriving where a tool USED to be is the kind of wrongness this map exists
-  // not to have.
-  if (p.target && p.target.orbitR !== undefined && p.phase !== "home") {
-    p.to.x = p.target.x; p.to.y = p.target.y;
-    if (p.phase === "arrive") { cam.tx = p.target.x; cam.ty = p.target.y; }
-  }
-  if (p.phase === "out") {
-    p.t = Math.min(1, p.t + dt / p.dur);
-    const pos = probePos(p, ease(p.t));
-    p.trail.push({ x: pos.x, y: pos.y, life: 1 });
-    if (p.trail.length > 90) p.trail.shift();
-    if (p.t >= 1) {
-      p.phase = "arrive"; p.wait = 0;
-      if (p.mode === "gap") {
-        // Nothing here does it. The dust IS the record being written.
-        for (let i = 0; i < 5; i++) setTimeout(() => puff(p.to.x, p.to.y, 26, 1.5), i * 170);
-      } else {
-        if (p.target && p.target.pulse !== undefined) p.target.pulse = 1;
-        puff(p.to.x, p.to.y, 16, .8, "237,113,0");
-      }
-      // Only once the LAST stop is reached, because the answer describes all of
-      // them and revealing it at the first would be a lie about the journey.
-      if (!p.stops.length) p.onArrive?.();
-    }
-  } else if (p.phase === "arrive") {
-    p.wait += dt;
-    const dwell = p.mode === "gap" ? 1600 : (p.stops.length ? 480 : 1000);
-    if (p.wait > dwell) {
-      if (p.stops.length) {
-        const next = p.stops.shift();
-        const here = { x: p.to.x, y: p.to.y };
-        beginLeg(here, next, p.mode);
-        probe.target = next;
-        aimCamera(next, p.mode);
-      } else {
-        // The return leg is its own arc, from wherever the tour ended rather
-        // than from where it began.
-        beginLeg({ x: p.to.x, y: p.to.y }, home, p.mode);
-        probe.phase = "home";
-      }
-    }
-  } else if (p.phase === "home") {
-    p.t = Math.min(1, p.t + dt / p.dur);
-    const pos = probePos(p, ease(p.t));
-    p.trail.push({ x: pos.x, y: pos.y, life: 1 });
-    if (p.trail.length > 90) p.trail.shift();
-    if (p.t >= 1) {
-      p.onDone?.();
-      probe = null;
-      cam.tx = 0; cam.ty = 0; cam.tz = 1; cam.trot = 0;
-      return;
-    }
-  }
-  for (const t of p.trail) t.life -= dt / 900;
-}
-
-// ---------------------------------------------------------------- drawing
-function draw(now) {
-  ctx.fillStyle = "#07070c";
-  ctx.fillRect(0, 0, W, H);
-
-  // Parallax starfield. Depth is what stops a pan feeling like a slide.
-  const cs = Math.cos(-cam.rot), ss = Math.sin(-cam.rot);
-  for (const s of stars) {
-    const px = (s.x - cam.x * s.depth) * cam.z, py = (s.y - cam.y * s.depth) * cam.z;
-    const sx = px * cs - py * ss + W/2;
-    const sy = px * ss + py * cs + H/2;
-    if (sx < -40 || sx > W + 40 || sy < -40 || sy > H + 40) continue;
-    ctx.globalAlpha = (.35 + .65 * (Math.sin(now * .0009 + s.tw) * .5 + .5)) * .8;
-    ctx.fillStyle = "#cfd4ff";
-    ctx.beginPath(); ctx.arc(sx, sy, s.r, 0, TAU); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // Gaps first: they sit behind everything, out in the dark.
-  ctx.textAlign = "center";
-  for (const g of gaps) {
-    const s = screenOf(g);
-    if (s.x < -300 || s.x > W + 300 || s.y < -300 || s.y > H + 300) continue;
-
-    if (g.confirmed) {
-      // Far enough along to have a core: this one is ready to be built.
-      const core = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 26 * cam.z);
-      core.addColorStop(0, "rgba(220,170,90,.5)");
-      core.addColorStop(1, "rgba(220,170,90,0)");
-      ctx.fillStyle = core;
-      ctx.beginPath(); ctx.arc(s.x, s.y, 26 * cam.z, 0, TAU); ctx.fill();
-    }
-    for (const m of g.motes) {
-      const wob = Math.sin(now * .0013 + m.ph) * 5;
-      const mx = s.x + Math.cos(m.a) * (m.d + wob) * cam.z;
-      const my = s.y + Math.sin(m.a) * (m.d + wob) * .62 * cam.z;
-      ctx.globalAlpha = (g.confirmed ? .6 : .34) * (.5 + .5 * Math.sin(now * .002 + m.ph));
-      ctx.fillStyle = "#c98a3a";
-      ctx.beginPath(); ctx.arc(mx, my, m.r * cam.z, 0, TAU); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    if (cam.z > .6) {
-      const k = Math.min(cam.z, 1.2);
-      ctx.font = (11 * k) + "px ui-sans-serif,system-ui,sans-serif";
-      ctx.fillStyle = "rgba(201,138,58,.9)";
-      ctx.fillText(g.label ?? "a need nobody met", s.x, s.y + 66 * cam.z);
-      ctx.font = (9.5 * k) + "px ui-sans-serif,system-ui,sans-serif";
-      ctx.fillStyle = "rgba(138,138,153,.8)";
-      ctx.fillText(g.confirmed ? "asked enough times — ready to build"
-                               : (g.distinct_callers ?? 1) + " caller so far",
-                   s.x, s.y + 80 * cam.z);
-    }
-  }
-
-  // THE MODEL, AS A BLACK HOLE. Everything else orbits it.
-  //
-  // It was a bright star, which was the wrong object. A star radiates outward:
-  // it says the centre sends things out. What actually happens is the opposite —
-  // every question falls in here first, and only the ones this cannot answer
-  // get thrown back out to a tool. Mass falls inward. A black hole is the shape
-  // of that.
-  //
-  // Drawn in three passes so the disc passes BEHIND the horizon and then in
-  // front of it, which is the only thing that makes the shape read as a hole
-  // rather than as a ring with a dot in it.
-  const hs = screenOf(home);
-  const Rh = 27 * cam.z;                       // the event horizon
-  const flare = homePulse;
-
-  // --- 1. the far side of the disc, passing behind
-  drawDisc(hs, -1, now, flare);
-
-  // --- 2. the horizon. Not dark grey: black, and blacker than the background,
-  // with a rim of lensed light where the background bends around it.
-  const halo = ctx.createRadialGradient(hs.x, hs.y, Rh * .96, hs.x, hs.y, Rh * 2.5);
-  halo.addColorStop(0, `rgba(255,190,120,${.30 + flare * .5})`);
-  halo.addColorStop(.25, `rgba(237,113,0,${.10 + flare * .25})`);
-  halo.addColorStop(1, "rgba(237,113,0,0)");
-  ctx.fillStyle = halo;
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh * 2.5, 0, TAU); ctx.fill();
-
-  ctx.fillStyle = "#000";
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh, 0, TAU); ctx.fill();
-
-  // The photon ring: light that orbited the hole before escaping. Thin, and
-  // brighter than anything else on the screen, because it is.
-  ctx.strokeStyle = `rgba(255,224,178,${.85 + flare * .15})`;
-  ctx.lineWidth = Math.max(1, 1.6 * cam.z);
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh * 1.02, 0, TAU); ctx.stroke();
-  ctx.strokeStyle = `rgba(255,140,40,${.35 + flare * .4})`;
-  ctx.lineWidth = Math.max(1, 3.2 * cam.z);
-  ctx.beginPath(); ctx.arc(hs.x, hs.y, Rh * 1.09, 0, TAU); ctx.stroke();
-
-  // --- 3. the near side, in front
-  drawDisc(hs, 1, now, flare);
-
-  if (cam.z > .5) {
-    ctx.textAlign = "center";
-    ctx.font = (12 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
-    ctx.fillStyle = "rgba(255,222,180,.95)";
-    ctx.fillText("Claude", hs.x, hs.y + Rh * 2.9 + 4);
-    ctx.font = (9.5 * Math.min(cam.z, 1.2)) + "px ui-sans-serif,system-ui,sans-serif";
-    ctx.fillStyle = "rgba(170,160,155,.8)";
-    ctx.fillText("every question falls in here first", hs.x, hs.y + Rh * 2.9 + 18 * cam.z);
-  }
-
-  // The worlds.
-  for (const b of bodies) {
-    const s = screenOf(b);
-    const R = b.radius * cam.z;
-    if (s.x < -200 || s.x > W + 200 || s.y < -200 || s.y > H + 200) continue;
-
-    // Brightness is a Wilson lower bound over calls that worked. An unlit world
-    // is not a broken one — it is one nothing is known about yet, and drawing
-    // those the same would be the most misleading thing on this screen.
-    if (b.lit) {
-      const gl = (18 + b.glow * 46 + b.pulse * 34) * cam.z;
-      const g = ctx.createRadialGradient(s.x, s.y, R * .7, s.x, s.y, R + gl);
-      g.addColorStop(0, "hsla(" + b.hue + ",72%,62%," + (.34 + b.glow * .3 + b.pulse * .34) + ")");
-      g.addColorStop(1, "hsla(" + b.hue + ",72%,62%,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(s.x, s.y, R + gl, 0, TAU); ctx.fill();
+    if (lit) {
+      const hl = new T.Sprite(new T.SpriteMaterial({
+        map: glowTex, blending: T.AdditiveBlending, depthWrite: false, transparent: true,
+        color: new T.Color().setHSL(hue, .85, .58), opacity: .45 + (t.brightness ?? 0) * .3,
+      }));
+      hl.scale.set(radius * 8, radius * 8, 1);
+      group.add(hl);
     }
 
-    // Orbit ring for anything with tools built on it.
-    if (b.moons.length) {
-      ctx.strokeStyle = b.lit ? "hsla(" + b.hue + ",50%,66%,.22)" : "rgba(120,120,140,.14)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(s.x, s.y, R + 22, (R + 22) * .42, 0, 0, TAU);
-      ctx.stroke();
-    }
-
-    // The body, lit from one side so it reads as a sphere rather than a dot.
-    const body = ctx.createRadialGradient(s.x - R * .35, s.y - R * .4, R * .1, s.x, s.y, R);
-    if (b.lit) {
-      body.addColorStop(0, "hsl(" + b.hue + ",68%," + (58 + b.glow * 16) + "%)");
-      body.addColorStop(.75, "hsl(" + b.hue + ",62%," + (28 + b.glow * 10) + "%)");
-      body.addColorStop(1, "hsl(" + b.hue + ",55%,12%)");
-    } else {
-      body.addColorStop(0, "#4a4a5c");
-      body.addColorStop(.75, "#2b2b38");
-      body.addColorStop(1, "#15151d");
-    }
-    ctx.fillStyle = body;
-    ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, TAU); ctx.fill();
-
-    // A band, turning, so it is visibly a world and not a bullet point.
-    ctx.save();
-    ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, TAU); ctx.clip();
-    ctx.globalAlpha = b.lit ? .2 : .1;
-    ctx.strokeStyle = b.lit ? "hsl(" + ((b.hue + 40) % 360) + ",70%,72%)" : "#7b7b90";
-    ctx.lineWidth = Math.max(1, R * .16);
-    ctx.beginPath();
-    ctx.ellipse(s.x, s.y + Math.sin(b.spin) * R * .3, R * 1.1, R * .3, 0, 0, TAU);
-    ctx.stroke();
-    ctx.restore();
-    ctx.globalAlpha = 1;
-
-    if (selected === b || hovered === b) {
-      ctx.strokeStyle = selected === b ? "rgba(237,113,0,.9)" : "rgba(255,255,255,.4)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(s.x, s.y, R + 7, 0, TAU); ctx.stroke();
-    }
-    if (b.archived) {
-      ctx.setLineDash([3, 4]);
-      ctx.strokeStyle = "rgba(150,150,165,.45)"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(s.x, s.y, R + 12, 0, TAU); ctx.stroke();
-      ctx.setLineDash([]);
-    }
+    const lab = labelSprite(t.name ?? t.tool_id, lit ? "#ffe2bd" : "#8f8fa2");
+    lab.position.y = radius + 8;
+    group.add(lab);
 
     // Moons: tools built on this one. The whole reason a registry beats a list.
-    for (const m of b.moons) {
-      const mx = s.x + Math.cos(m.a) * (R + 22);
-      const my = s.y + Math.sin(m.a) * (R + 22) * .42;
-      ctx.fillStyle = "#d8dcf0";
-      ctx.beginPath(); ctx.arc(mx, my, 3 * Math.max(cam.z, .6), 0, TAU); ctx.fill();
+    const moons = [];
+    for (let k = 0; k < Math.min(t.dependents ?? 0, 3); k++) {
+      const m = new T.Mesh(new T.SphereGeometry(Math.max(.9, radius * .3), 14, 10),
+        new T.MeshStandardMaterial({ color: 0xd8dcf0, roughness: .7 }));
+      group.add(m);
+      moons.push({ mesh: m, d: radius * 2.8 + k * radius, a: ((h >> (k + 2)) % 628) / 100, rate: .55 - k * .13 });
     }
 
-    if (cam.z > .55) {
-      const k = Math.min(cam.z, 1.15);
-      ctx.font = (11.5 * k) + "px ui-sans-serif,system-ui,sans-serif";
-      ctx.fillStyle = b.lit ? "rgba(236,236,240,.92)" : "rgba(160,160,178,.62)";
-      ctx.fillText(b.name ?? b.tool_id, s.x, s.y + R + 17 * k);
-      if ((b.mass ?? 0) > 0 && cam.z > .8) {
-        ctx.font = (9.5 * k) + "px ui-sans-serif,system-ui,sans-serif";
-        ctx.fillStyle = "rgba(138,138,153,.8)";
-        ctx.fillText(b.mass + (b.mass === 1 ? " call" : " calls"), s.x, s.y + R + 30 * k);
-      }
-    }
-  }
+    scene.add(group);
+    bodies.push({ ...t, group, mesh, moons, lit, radius, R, a, inc, rate: 30 / Math.pow(R, 1.5), pulse: 0 });
+  });
 
-  // Transient dust — a gap being written down, or an arrival.
-  for (const d of dust) {
-    const s = screenOf(d);
-    ctx.globalAlpha = Math.max(0, d.life) * .8;
-    ctx.fillStyle = "rgb(" + d.colour + ")";
-    ctx.beginPath(); ctx.arc(s.x, s.y, d.r * cam.z, 0, TAU); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // The wake, still drawn: it is behind you now rather than ahead of you, and
-  // seeing where you came from is most of what makes movement legible.
-  if (probe) {
-    ctx.lineCap = "round";
-    for (let i = 1; i < probe.trail.length; i++) {
-      const sa = screenOf(probe.trail[i - 1]), sb = screenOf(probe.trail[i]);
-      ctx.globalAlpha = Math.max(0, probe.trail[i].life) * .4;
-      ctx.strokeStyle = probe.mode === "gap" ? "#c98a3a" : "#ED7100";
-      ctx.lineWidth = Math.max(.6, 2.2 * (i / probe.trail.length) * cam.z);
-      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  // NO SHIP IS DRAWN. You are inside it.
-  drawTether(now);
-  drawReticle(now);
-  updateHud(now);
+  // Gaps: dust out past every orbit, in the empty space that is the point of
+  // them. Not yet a world, which is exactly the claim being made.
+  (gj.clusters ?? []).forEach((cl) => {
+    const h = hash(cl.id);
+    const a = (h % 1000) / 1000 * TAU;
+    const R = 460 + ((h >> 7) % 160);
+    addGapCloud(
+      new T.Vector3(Math.cos(a) * R, ((((h >> 5) % 100) / 100) - .5) * 90, Math.sin(a) * R),
+      cl.label ?? "a need nobody met", cl.confirmed === true);
+  });
 }
 
-// Half the accretion disc at a time: side = -1 draws what is behind the hole,
-// side = +1 what is in front. Splitting it around the horizon is what produces
-// the band arcing over the top, and it is the whole illusion.
-//
-// Inner material is hotter and moving faster, so it runs white; outer material
-// cools to orange. One side is brighter than the other because it is rotating
-// toward the viewer - a symmetric disc reads as a logo rather than as physics.
-function drawDisc(hs, side, now, flare) {
-  const tilt = .30;
-  for (const d of disc) {
-    const sy = Math.sin(d.a);
-    if (side < 0 ? sy > 0 : sy <= 0) continue;
-    const x = hs.x + Math.cos(d.a) * d.r * cam.z;
-    const y = hs.y + sy * d.r * tilt * cam.z;
-    const heat = 1 - Math.min(1, (d.r - 32) / 50);
-    const dop = .35 + .65 * (.5 + .5 * Math.cos(d.a - 0.4));
-    const a = (.20 + heat * .55) * dop * d.w * (1 + flare * .8);
-    ctx.globalAlpha = Math.min(1, a);
-    ctx.fillStyle = heat > .66 ? "#fff4e2" : heat > .33 ? "#ffc06a" : "#ED7100";
-    ctx.beginPath();
-    ctx.arc(x, y, (.9 + heat * 1.5) * cam.z * (1 + flare * .5), 0, TAU);
-    ctx.fill();
+function addGapCloud(centre, label, confirmed) {
+  const N = confirmed ? 900 : 620;
+  const pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const u = Math.random() * 2 - 1, th = Math.random() * TAU;
+    // A confirmed cluster is tighter: it has been asked enough times to have
+    // begun collapsing toward something buildable.
+    const r = (confirmed ? 7 : 12) + Math.pow(Math.random(), .5) * (confirmed ? 20 : 34);
+    const k = Math.sqrt(1 - u * u);
+    pos[i*3] = centre.x + Math.cos(th) * k * r;
+    pos[i*3+1] = centre.y + u * r * .6;
+    pos[i*3+2] = centre.z + Math.sin(th) * k * r;
   }
-  ctx.globalAlpha = 1;
+  const g = new T.BufferGeometry();
+  g.setAttribute("position", new T.BufferAttribute(pos, 3));
+  scene.add(new T.Points(g, new T.PointsMaterial({
+    color: 0xc98a3a, size: confirmed ? 1.6 : 1.15, transparent: true,
+    opacity: confirmed ? .7 : .4, blending: T.AdditiveBlending, depthWrite: false,
+  })));
+  const lab = labelSprite(String(label).slice(0, 34), "#c98a3a", 34);
+  lab.position.copy(centre); lab.position.y += 36;
+  scene.add(lab);
+  gapClouds.push({ centre, confirmed });
 }
 
-// THE TETHER. It is never not drawn.
+// ---------------------------------------------------------------- the tether
 //
-// The ship goes out to a tool and comes back, and the line home is the thing
-// that says why: a tool is not where the answer lives, it is somewhere the
+// It is never not drawn. The ship goes out to a tool and comes back, and the
+// line home says why: a tool is not where the answer lives, it is somewhere the
 // model reached. Cut the tether and a tool is just an API. The whole argument
-// of this project is that the line exists.
-function drawTether(now) {
-  const hs = screenOf(home);
-  const cx = W / 2, cy = H / 2;
-  const dist = Math.hypot(hs.x - cx, hs.y - cy);
-  if (dist < 6) return;
+// this project makes is that the line is there.
+const tetherGeo = new T.BufferGeometry();
+tetherGeo.setAttribute("position", new T.BufferAttribute(new Float32Array(6), 3));
+const tether = new T.Line(tetherGeo, new T.LineBasicMaterial({
+  color: 0xffc078, transparent: true, opacity: .5, blending: T.AdditiveBlending, depthWrite: false,
+}));
+scene.add(tether);
 
-  const grad = ctx.createLinearGradient(cx, cy, hs.x, hs.y);
-  grad.addColorStop(0, "rgba(255,200,130,.85)");
-  grad.addColorStop(1, "rgba(237,113,0,.20)");
-  ctx.strokeStyle = grad;
-  ctx.lineWidth = 1.4;
-  ctx.setLineDash([9, 7]);
-  ctx.lineDashOffset = -(now * .05) % 16;   // pulling inward, toward the hole
-  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(hs.x, hs.y); ctx.stroke();
-  ctx.setLineDash([]);
+// ---------------------------------------------------------------- flight
+let flight = null;
+let holePulse = 0;
+const look = new T.Vector3(0, 0, 0);
+const UP = new T.Vector3(0, 1, 0);
+const tmp = new T.Vector3();
+
+// Out and around rather than straight in: a lateral bow plus a climb, so the
+// destination swings across the glass as you close instead of simply growing.
+// Arriving should feel like arriving.
+function legTo(from, to) {
+  const dir = to.clone().sub(from);
+  const len = Math.max(1, dir.length());
+  const side = new T.Vector3().crossVectors(dir, UP).normalize().multiplyScalar(len * .24);
+  const up = UP.clone().multiplyScalar(len * .15);
+  return new T.CatmullRomCurve3([
+    from.clone(),
+    from.clone().lerp(to, .30).add(side).add(up),
+    from.clone().lerp(to, .72).add(side.multiplyScalar(.42)).add(up.multiplyScalar(.55)),
+    to.clone(),
+  ]);
 }
 
-// The reticle. Fixed at the centre, because the centre is where the ship is.
-function drawReticle(now) {
-  const cx = W / 2, cy = H / 2;
-  const flying = probe && probe.phase !== "arrive";
-  ctx.strokeStyle = flying ? "rgba(255,200,130,.75)" : "rgba(237,113,0,.42)";
-  ctx.lineWidth = 1.2;
-  const g = 9, a = 20;
-  for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
-    ctx.beginPath();
-    ctx.moveTo(cx + d[0] * g, cy + d[1] * g);
-    ctx.lineTo(cx + d[0] * a, cy + d[1] * a);
-    ctx.stroke();
-  }
-  ctx.beginPath();
-  ctx.arc(cx, cy, 3.2 + (flying ? Math.sin(now * .012) * .9 : 0), 0, TAU);
-  ctx.stroke();
+// Stop SHORT of a body, on the far side from the centre, so you arrive facing
+// the tool with the black hole behind it and the tether crossing the view.
+// That framing is the argument, drawn.
+function approachPoint(b) {
+  const p = bodyPos(b);
+  return p.clone().add(p.clone().normalize().multiplyScalar(b.radius * 5 + 18))
+          .add(new T.Vector3(0, b.radius * 1.8, 0));
 }
 
-// Numbers that mean something. Range is in world units, which are arbitrary -
-// but the ratio is not, and watching it fall as you close on a tool is the
-// whole point of showing it. Throttled: the DOM does not need 60 writes a
-// second to tell you a number is going down.
+function beginFlight(stops, opts) {
+  const first = stops[0];
+  flight = {
+    curve: legTo(camera.position.clone(), first.point), t: 0,
+    dur: 1500 + Math.min(2800, camera.position.distanceTo(first.point) * 5),
+    phase: "out", wait: 0, stops: stops.slice(1), target: first, ...opts,
+  };
+}
+
+// ---------------------------------------------------------------- hud
 let hudAt = 0;
-function updateHud(now) {
+function hud(now) {
   if (now - hudAt < 90) return;
   hudAt = now;
-  const range = Math.round(Math.hypot(cam.x - home.x, cam.y - home.y));
-  const flying = probe && probe.phase !== "arrive";
-  document.getElementById("t-range").textContent = range;
-  document.getElementById("t-state").textContent = range < 8 ? "MOORED" : "HELD";
-  document.getElementById("t-vel").textContent = flying
-    ? Math.round(300 + 900 * Math.sin(Math.PI * Math.min(1, probe.t))) : "0";
-  document.getElementById("t-target").textContent = probe
-    ? String(probe.mode === "gap" ? "OPEN SPACE"
-        : (probe.target && (probe.target.name || probe.target.tool_id)) || "-").slice(0, 22).toUpperCase()
+  const range = Math.round(camera.position.distanceTo(home));
+  const flying = flight && flight.phase !== "arrive";
+  $("#tRange").textContent = range;
+  $("#tState").textContent = range < 80 ? "MOORED" : "HELD";
+  $("#tBar").style.width = Math.min(100, range / 6) + "%";
+  const v = flying ? Math.round(240 + 1400 * Math.sin(Math.PI * Math.min(1, flight.t))) : 0;
+  $("#tVel").textContent = v;
+  $("#vBar").style.width = Math.min(100, v / 17) + "%";
+  $("#tTarget").textContent = flight
+    ? String(flight.target.name ?? "OPEN SPACE").slice(0, 18).toUpperCase()
     : "HOLDING";
 }
 
+// ---------------------------------------------------------------- loop
 let last = performance.now();
+
 function frame(now) {
   const dt = Math.min(48, now - last); last = now;
-  step(dt); draw(now);
+  const s = dt / 1000;
+
+  for (const b of bodies) {
+    b.a += b.rate * s;
+    b.group.position.copy(bodyPos(b));
+    b.mesh.rotation.y += .14 * s;
+    if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - s * .8);
+    b.mesh.scale.setScalar(1 + b.pulse * .2);
+    for (const m of b.moons) {
+      m.a += m.rate * s;
+      m.mesh.position.set(Math.cos(m.a) * m.d, Math.sin(m.a) * m.d * .3, Math.sin(m.a) * m.d);
+    }
+  }
+
+  // Differential rotation is the entire reason the disc is particles.
+  for (let i = 0; i < DISC_N; i++) {
+    const r = discDat[i*3];
+    discDat[i*3+1] += discDat[i*3+2] * s;
+    const a = discDat[i*3+1];
+    discPos[i*3] = Math.cos(a) * r;
+    discPos[i*3+1] = (Math.random() - .5) * .3;   // a little thickness
+    discPos[i*3+2] = Math.sin(a) * r;
+  }
+  discGeo.attributes.position.needsUpdate = true;
+
+  if (holePulse > 0) holePulse = Math.max(0, holePulse - s * .7);
+  glow.scale.setScalar(HORIZON * (10 + holePulse * 7));
+  keyLight.intensity = 1400 + holePulse * 3200;
+
+  if (flight) {
+    const f = flight;
+    if (f.phase === "out" || f.phase === "home") {
+      f.t = Math.min(1, f.t + dt / f.dur);
+      const e = ease(f.t);
+      camera.position.copy(f.curve.getPoint(e));
+      // Look where you are GOING, not at where you will end up: aiming at the
+      // endpoint turns the whole approach into a slow zoom.
+      look.lerp(f.phase === "home" ? home : f.curve.getPoint(Math.min(1, e + .05)), .15);
+      if (f.t >= 1) {
+        if (f.phase === "home") { f.onDone?.(); flight = null; }
+        else {
+          f.phase = "arrive"; f.wait = 0;
+          if (f.target.body) f.target.body.pulse = 1;
+          if (!f.stops.length) f.onArrive?.();
+        }
+      }
+    } else {
+      f.wait += dt;
+      if (f.target.body) look.lerp(f.target.body.group.position, .07);
+      const dwell = f.stops.length ? 750 : (f.mode === "gap" ? 2200 : 1700);
+      if (f.wait > dwell) {
+        if (f.stops.length) {
+          const next = f.stops.shift();
+          f.curve = legTo(camera.position.clone(), next.point);
+          f.t = 0; f.phase = "out"; f.target = next;
+          f.dur = 1200 + Math.min(2400, camera.position.distanceTo(next.point) * 5);
+        } else {
+          f.curve = legTo(camera.position.clone(), MOORING);
+          f.t = 0; f.phase = "home";
+          f.dur = 1600 + Math.min(2800, camera.position.distanceTo(MOORING) * 4);
+        }
+      }
+    }
+  } else {
+    // Idle: a slow swell so the cockpit is never a still photograph.
+    look.lerp(home, .05);
+    camera.position.y = lerp(camera.position.y, MOORING.y + Math.sin(now * .00022) * 4, .02);
+  }
+
+  camera.lookAt(look);
+
+  // From just under the nose rather than from the exact centre of the screen,
+  // so it reads as coming off the ship instead of out of your eye.
+  camera.getWorldDirection(tmp);
+  const nose = camera.position.clone().addScaledVector(tmp, 7).add(new T.Vector3(0, -2.4, 0));
+  const tp = tetherGeo.attributes.position;
+  tp.setXYZ(0, nose.x, nose.y, nose.z);
+  tp.setXYZ(1, home.x, home.y, home.z);
+  tp.needsUpdate = true;
+  tether.material.opacity = .28 + .22 * (.5 + .5 * Math.sin(now * .003));
+
+  hud(now);
+  renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// ---------------------------------------------------------------- interaction
-let drag = null;
-canvas.addEventListener("pointerdown", (e) => {
-  drag = { x: e.clientX, y: e.clientY, cx: cam.tx, cy: cam.ty, moved: false };
-  canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener("pointermove", (e) => {
-  if (drag) {
-    const dx = (e.clientX - drag.x) / cam.z, dy = (e.clientY - drag.y) / cam.z;
-    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
-    cam.tx = drag.cx - dx; cam.ty = drag.cy - dy;
-    cam.x = cam.tx; cam.y = cam.ty;
-    return;
-  }
-  const w = world(e.clientX, e.clientY);
-  hovered = bodies.find(b => Math.hypot(b.x - w.x, b.y - w.y) < b.radius + 10) ?? null;
-  canvas.style.cursor = hovered ? "pointer" : "grab";
-});
-canvas.addEventListener("pointerup", (e) => {
-  if (drag && !drag.moved) {
-    const w = world(e.clientX, e.clientY);
-    const hit = bodies.find(b => Math.hypot(b.x - w.x, b.y - w.y) < b.radius + 10);
-    if (hit) showTool(hit);
-    else { selected = null; hidePanel(); }
-  }
-  drag = null;
-});
-canvas.addEventListener("wheel", (e) => {
-  e.preventDefault();
-  cam.tz = Math.max(.35, Math.min(2.4, cam.tz * (e.deltaY > 0 ? .9 : 1.11)));
-}, { passive: false });
-
-// ---------------------------------------------------------------- panel
+// ---------------------------------------------------------------- asking
 const panel = $("#panel");
 const setStatus = (s) => { $("#status").textContent = s ?? ""; };
-function hidePanel() { panel.classList.remove("up"); $("#legend").classList.remove("hide"); }
-function showPanel(html) { panel.innerHTML = html; panel.classList.add("up"); $("#legend").classList.add("hide"); }
-
-// A REAL FORM, BUILT FROM THE TOOL'S OWN SCHEMA.
-//
-// This used to ask for a JSON object and offer "{}", which meant the only way
-// to learn that air-quality wants lat and lon was to run it and be refused.
-// The schema was in the registry the whole time and simply never came out of
-// search; it does now. When a tool has no schema the JSON box comes back, so
-// an old row degrades to the old behaviour rather than to nothing.
-function fieldsFor(schema) {
-  const keys = Object.keys(schema ?? {});
-  if (!keys.length) {
-    return schema
-      ? "<p class=\"nofields\">Takes no arguments.</p>"
-      : "<div class=\"fields\"><label>Arguments, as JSON — this tool published no schema</label>" +
-        "<input class=\"args\" id=\"raw\" value=\"{}\" spellcheck=\"false\"></div>";
-  }
-  return "<div class=\"fields\">" + keys.map((k) => {
-    const f = schema[k] ?? {};
-    return "<div><label for=\"f-" + esc(k) + "\"><b>" + esc(k) + "</b>" +
-      (f.required ? "<span class=\"req\">required</span>" : "") +
-      (f.description ? " — " + esc(f.description) : "") + "</label>" +
-      "<input id=\"f-" + esc(k) + "\" data-key=\"" + esc(k) + "\" data-type=\"" +
-      esc(f.type ?? "string") + "\" " +
-      (f.type === "number" ? "type=\"number\" step=\"any\" " : "") +
-      "placeholder=\"" + esc(f.type ?? "string") + "\" spellcheck=\"false\"></div>";
-  }).join("") + "</div>";
-}
-
-// Empty optional fields are omitted rather than sent as "", which a tool would
-// have to defend against. Empty REQUIRED fields are sent as empty so the tool's
-// own validation — not this page's guess at it — produces the message.
-function readFields(schema) {
-  const raw = document.getElementById("raw");
-  if (raw) return JSON.parse(raw.value || "{}");
-  const out = {};
-  for (const el of document.querySelectorAll(".fields input[data-key]")) {
-    const v = el.value.trim();
-    if (!v && !(schema?.[el.dataset.key]?.required)) continue;
-    out[el.dataset.key] = el.dataset.type === "number" && v !== "" ? Number(v)
-                        : el.dataset.type === "boolean" ? (v === "true")
-                        : v;
-  }
-  return out;
-}
-
-function showTool(b) {
-  selected = b;
-  const pct = (v) => v == null ? "—" : Math.round(v * 100) + "%";
-  showPanel(
-    "<h2>" + esc(b.name ?? b.tool_id) + "</h2>" +
-    "<p class=\"sub\">" + esc(b.tool_id) + (b.version ? " · v" + esc(b.version) : "") +
-      (b.archived ? " · dormant" : "") + "</p>" +
-    "<div class=\"stats\">" +
-      "<span><b>" + (b.mass ?? 0) + "</b> calls</span>" +
-      "<span><b>" + (b.distinct_callers ?? 0) + "</b> callers</span>" +
-      "<span>reliability <b>" + pct(b.brightness) + "</b></span>" +
-      "<span><b>" + (b.dependents ?? 0) + "</b> built on it</span>" +
-    "</div>" +
-    (b.lit ? "" : "<p class=\"desc\" style=\"color:var(--dim)\">Never called. Nothing is known about whether " +
-      "it works — which is why it is drawn unlit rather than dim.</p>") +
-    fieldsFor(b.input_schema) +
-    "<div class=\"row\"><button id=\"run\">Run it</button>" +
-    "<button class=\"ghost\" id=\"close\">Close</button></div><div id=\"res\"></div>");
-  $("#close").onclick = () => { selected = null; hidePanel(); };
-  $("#run").onclick = () => runTool(b);
-}
+const hidePanel = () => panel.classList.remove("up");
+const showPanel = (h) => { panel.innerHTML = h; panel.classList.add("up"); };
 
 async function mcp(name, args) {
   const res = await fetch("/api/mcp", {
@@ -898,150 +618,99 @@ async function mcp(name, args) {
   try { return JSON.parse(block); } catch { return { raw: block }; }
 }
 
-async function runTool(b) {
-  if (probe) return;
-  const out = $("#res");
-  let args;
-  try { args = readFields(b.input_schema); }
-  catch { out.innerHTML = "<pre style=\"color:#e08a8a\">Arguments are not valid JSON.</pre>"; return; }
-  out.innerHTML = "<pre>flying out to it…</pre>";
-  // Fly to the tool and bring the answer back, rather than just printing it.
-  launch(b, {
-    mode: "call",
-    onArrive: async () => {
-      try {
-        const d = await mcp("endless_call", { tool_id: b.tool_id, input: args });
-        out.innerHTML = "<pre>" + esc(JSON.stringify(d.result ?? d, null, 2)) + "</pre>";
-        b.mass = (b.mass ?? 0) + 1;
-      } catch (e) {
-        out.innerHTML = "<pre style=\"color:#e08a8a\">" + esc(e.message) + "</pre>";
-      }
-    },
-  });
-}
+$("#go").onclick = ask;
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
 
-// ---------------------------------------------------------------- search
-$("#go").onclick = search;
-$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
-
-async function search() {
+async function ask() {
   const q = $("#q").value.trim();
-  if (!q || probe) return;
+  if (!q || flight) return;
   $("#go").disabled = true;
-  selected = null; hidePanel();
-  setStatus("thinking…");
+  hidePanel();
+  setStatus("transmitting…");
 
-  // ONE CALL, AND IT MAY NOT INVOLVE A TOOL AT ALL. The page used to search,
-  // hand back a tool, and ask the person to fill in its arguments — the right
-  // interface for an agent composing a capability, the wrong one for someone
-  // who asked a question. endless_answer decides whether a tool is even needed,
-  // and the ride happens after, because only then do we know where we are going
-  // or whether we are going anywhere.
   let d;
   try { d = await mcp("endless_answer", { question: q }); }
   catch (e) { setStatus(e.message); $("#go").disabled = false; return; }
 
-  // 1. ANSWERED WITHOUT LEAVING. No flight, because nothing was fetched — the
-  // centre flares and that is the whole journey. Drawing a ride here would be a
-  // lie about where the answer came from, and showing the mechanism is the only
-  // reason this map exists.
+  // 1. ANSWERED IN PLACE. You do not move. The hole flares in front of you and
+  // that is the whole journey — flying somewhere would be a lie about where the
+  // answer came from, and showing the mechanism is why this exists over a list.
   if (d.answered_by === "model") {
-    homePulse = 1;
-    cam.tx = 0; cam.ty = 0; cam.tz = 1.35;
-    setStatus(d.gap_logged ? "answered without a tool — but expensively" : "answered without a tool");
-    showAnswer(q, d, null);
+    holePulse = 1;
+    setStatus(d.gap_logged ? "answered in place — but expensively" : "answered in place");
+    showAnswer(q, d);
     $("#go").disabled = false;
-    setTimeout(() => setStatus(""), 3200);
+    setTimeout(() => setStatus(""), 3400);
     return;
   }
 
-  // The DISTINCT tools this answer came from, in the order they were first
-  // reached. Three calls to one tool is one place to visit; two tools is a
-  // journey with two stops.
+  // DISTINCT tools, in the order first reached. Three calls to one tool is one
+  // place to visit, not three identical flights.
   const seen = new Set();
   const stops = (d.calls ?? [])
-    .map((c) => c.tool_id)
-    .filter((id) => id && !seen.has(id) && seen.add(id))
-    .map((id) => bodies.find((b) => b.tool_id === id))
-    .filter(Boolean);
-  const target = stops[0] ?? (d.tool_id ? bodies.find((b) => b.tool_id === d.tool_id) : null);
+    .map(c => c.tool_id)
+    .filter(id => id && !seen.has(id) && seen.add(id))
+    .map(id => bodies.find(b => b.tool_id === id))
+    .filter(Boolean)
+    .map(b => ({ body: b, point: approachPoint(b), name: b.name ?? b.tool_id }));
 
-  // 3. NOBODY COULD. Ride out past the rim and watch the need get written down.
-  if (!target) {
-    const a = Math.random() * TAU, r = 860 + Math.random() * 180;
-    const spot = { x: Math.cos(a) * r, y: Math.sin(a) * r };
-    setStatus("nothing here does that — flying out to record it");
-    launch(spot, {
+  // 3. NOBODY COULD. Out past every orbit, where the dust is.
+  if (!stops.length) {
+    const a = Math.random() * TAU, R = 470 + Math.random() * 120;
+    const centre = new T.Vector3(Math.cos(a) * R, (Math.random() - .5) * 70, Math.sin(a) * R);
+    setStatus("nothing out here does that — going to record it");
+    beginFlight([{ point: centre.clone().add(new T.Vector3(0, 20, 70)), name: "OPEN SPACE" }], {
       mode: "gap",
       onArrive: () => {
+        addGapCloud(centre, d.need ?? q, false);
         setStatus("recorded as a need nobody met");
-        gaps.push({ id: "new-" + Date.now(), label: d.need ?? q, confirmed: false,
-                    distinct_callers: 1, x: spot.x, y: spot.y, motes: makeMotes(30, 48) });
-        showPanel(
-          "<h2 style=\"color:var(--dust)\">Nothing here can do that</h2>" +
-          "<p class=\"sub\">" + esc(q) + "</p>" +
-          "<div class=\"gapnote\">" + esc(d.answer ?? "Recorded as a need nobody met.") +
-          "<ul><li>When enough separate people ask for the same thing, it becomes a candidate to build.</li>" +
-          "<li>One person asking repeatedly is not demand, and counts once.</li></ul></div>");
+        showPanel(`<p class="q">${esc(q)}</p>` +
+          `<div class="gap">${esc(d.answer ?? "Recorded as a need nobody met.")}</div>` +
+          `<div class="row"><button id="close">Close</button></div>`);
+        $("#close").onclick = hidePanel;
       },
       onDone: () => { $("#go").disabled = false; },
     });
     return;
   }
 
-  // 2. TOOLS DID IT. Visit each one, then come home with the answer.
-  const route = stops.length ? stops : [target];
-  setStatus(route.length > 1
-    ? "asking " + route.length + " tools"
-    : "asking " + (target.name ?? target.tool_id));
-  tour(route, {
+  // 2. TOOLS DID IT. Fly the whole route; answer on reaching the LAST stop,
+  // because the answer describes all of them.
+  setStatus(stops.length > 1 ? `plotting ${stops.length} stops` : `heading for ${stops[0].name}`);
+  beginFlight(stops, {
     mode: "find",
-    onArrive: () => { setStatus(""); showAnswer(q, d, target); },
+    onArrive: () => { setStatus(""); showAnswer(q, d); },
     onDone: () => { $("#go").disabled = false; },
   });
 }
 
-// The answer first, in prose, because that is what was asked for. What it ran
-// and what came back are underneath for anyone who wants to check it — visible
-// enough to be checkable, quiet enough not to be the point.
-function showAnswer(question, d, b) {
-  selected = b;
+function showAnswer(q, d) {
+  const n = (d.calls ?? []).length;
   const via = d.answered_by === "model"
-    // Said plainly. "No tool was used" and "no tool exists" are different facts,
-    // and the old page conflated them by only ever naming a tool.
-    ? "answered by <b>Claude</b>, no tool needed" +
-      (d.gap_logged ? " — but expensively, so it is recorded as a tool worth having" : "")
-    : (d.calls ?? []).length > 1
-      // Naming only the first tool would under-report an answer that came from
-      // three, which is exactly what the old single-call response shape did.
-      ? "answered using <b>" + d.calls.length + " tool calls</b> across " +
-        new Set(d.calls.map((c) => c.tool_id)).size + " tool" +
-        (new Set(d.calls.map((c) => c.tool_id)).size === 1 ? "" : "s")
-      : "answered by <b>" + esc(d.tool_name ?? d.tool_id) + "</b>" + (d.ms ? " · " + esc(d.ms) + "ms" : "");
+    ? `answered by <b>Claude</b> — no tool needed` +
+      (d.gap_logged ? `, but expensively, so it is logged as a tool worth having` : "")
+    : n > 1 ? `answered from <b>${n} tool calls</b>`
+            : `answered by <b>${esc(d.tool_name ?? d.tool_id)}</b>${d.ms ? ` · ${esc(d.ms)}ms` : ""}`;
+
   showPanel(
-    "<p class=\"sub\" style=\"margin-bottom:8px\">" + esc(question) + "</p>" +
-    "<p class=\"answer\">" + esc(d.answer ?? "") + "</p>" +
-    "<p class=\"via\">" + via + "</p>" +
-    (d.error ? "<div class=\"gapnote\">" + esc(d.error) + "</div>" : "") +
-    ((d.calls ?? []).length
-      ? "<details><summary>what it actually ran, and what came back</summary>" +
-        d.calls.map((c) =>
-          "<pre>" + esc(c.tool_id + " " + JSON.stringify(c.input)) + "\n" +
-          esc(JSON.stringify(c.error ? { error: c.error } : c.result, null, 2)) + "</pre>").join("") +
-        "</details>"
-      : "") +
-    "<div class=\"row\">" +
-    (b ? "<button class=\"ghost\" id=\"manual\">Drive it yourself</button>" : "") +
-    "<button class=\"ghost\" id=\"close\">Close</button></div><div id=\"slot\"></div>");
-  $("#close").onclick = () => { selected = null; hidePanel(); };
-  // The form is not gone, only no longer the first thing. An agent composing
-  // this tool, or a person who wants a different argument, still needs it.
-  if (b) $("#manual").onclick = () => showTool(b);
+    `<p class="q">${esc(q)}</p>` +
+    `<p class="a">${esc(d.answer ?? "")}</p>` +
+    `<p class="via">${via}</p>` +
+    (d.error ? `<div class="gap" style="margin-top:9px">${esc(d.error)}</div>` : "") +
+    (n ? `<details><summary>what it ran, and what came back</summary>` +
+         d.calls.map(c => `<pre>${esc(c.tool_id + " " + JSON.stringify(c.input))}\n` +
+           `${esc(JSON.stringify(c.error ? { error: c.error } : c.result, null, 2))}</pre>`).join("") +
+         `</details>` : "") +
+    `<div class="row"><button id="close">Close</button></div>`);
+  $("#close").onclick = hidePanel;
 }
 
 load().then(() => {
-  setStatus(bodies.length + " worlds · " + gaps.length + " needs nobody met");
-  setTimeout(() => setStatus(""), 4500);
+  $("#boot").classList.add("gone");
+  setStatus(`${bodies.length} worlds · ${gapClouds.length} unmet`);
+  setTimeout(() => setStatus(""), 4200);
+}).catch((e) => {
+  $("#boot").textContent = "systems failed: " + e.message;
 });
 </script>
 </body>
