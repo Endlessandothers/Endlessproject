@@ -75,6 +75,30 @@
   .gapnote{border-left:3px solid var(--dust);padding-left:12px;color:var(--dust);font-size:.86rem}
   .gapnote ul{margin:6px 0 0;padding-left:18px;color:var(--dim)}
 
+  /* THE CANOPY. Drawn over everything, catching nothing: the glass is not a
+     control, so it must never eat a click meant for a world behind it. */
+  .canopy{position:fixed;inset:0;pointer-events:none;z-index:5}
+  .canopy .vig{position:absolute;inset:0;
+    background:radial-gradient(ellipse at 50% 50%, transparent 46%, rgba(0,0,0,.55) 100%)}
+  .canopy .frame{position:absolute;inset:14px;border-radius:26px;
+    border:1px solid rgba(237,113,0,.16);
+    box-shadow:inset 0 0 90px rgba(237,113,0,.05)}
+  .canopy .corner{position:absolute;width:26px;height:26px;border:2px solid rgba(237,113,0,.5)}
+  .canopy .tl{top:22px;left:22px;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+  .canopy .tr{top:22px;right:22px;border-left:0;border-bottom:0;border-radius:0 8px 0 0}
+  .canopy .bl{bottom:22px;left:22px;border-right:0;border-top:0;border-radius:0 0 0 8px}
+  .canopy .br{bottom:22px;right:22px;border-left:0;border-top:0;border-radius:0 0 8px 0}
+
+  .readout{position:fixed;z-index:6;pointer-events:none;
+    font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.06em;text-transform:uppercase;color:rgba(237,113,0,.78)}
+  .readout b{color:#ffd9a8;font-weight:600}
+  .readout .lbl{color:rgba(160,150,145,.65)}
+  #hud-l{left:26px;top:50%;transform:translateY(-50%)}
+  #hud-r{right:26px;top:50%;transform:translateY(-50%);text-align:right}
+  @media (max-width:700px){ #hud-l,#hud-r{top:auto;bottom:96px;transform:none;font-size:10px}
+    #hud-r{right:26px} }
+
   .legend{position:fixed;left:16px;bottom:16px;font-size:.72rem;color:var(--dim);
     background:rgba(12,12,20,.8);border:1px solid var(--line);border-radius:12px;
     padding:11px 14px;backdrop-filter:blur(8px);line-height:1.9;transition:opacity .3s}
@@ -108,6 +132,27 @@
   <div style="opacity:.7">used tools orbit close and fast · unused ones drift out and slow</div>
 </div>
 
+<div class="canopy">
+  <div class="vig"></div>
+  <div class="frame"></div>
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+</div>
+
+<div class="readout" id="hud-l">
+  <div class="lbl">tether</div>
+  <div><b id="t-state">MOORED</b></div>
+  <div class="lbl">range to claude</div>
+  <div><b id="t-range">0</b></div>
+</div>
+
+<div class="readout" id="hud-r">
+  <div class="lbl">heading</div>
+  <div><b id="t-target">HOLDING</b></div>
+  <div class="lbl">velocity</div>
+  <div><b id="t-vel">0</b></div>
+</div>
+
 <div class="panel" id="panel"></div>
 
 <script>
@@ -138,7 +183,17 @@ function resize() {
 resize();
 addEventListener("resize", resize);
 
-const cam = { x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1 };
+// THE CAMERA IS THE SHIP NOW.
+//
+// It used to be an overhead eye that eased toward whatever a probe was flying
+// at, with the probe drawn as a little triangle. You watched the journey. In a
+// cockpit you take it: the camera sits exactly where the ship is, and `rot` is
+// its heading, so the world turns around you rather than you sliding across it.
+//
+// Labels are still drawn upright, because they are placed at screen positions
+// after the rotation rather than inside it. A readable name is worth more than
+// the consistency of tipping it over with everything else.
+const cam = { x: 0, y: 0, z: 1, rot: 0, tx: 0, ty: 0, tz: 1, trot: 0 };
 const stars = Array.from({ length: 220 }, () => ({
   x: (Math.random() - .5) * 3200, y: (Math.random() - .5) * 3200,
   r: Math.random() * 1.1 + .25, tw: Math.random() * TAU, depth: .25 + Math.random() * .5,
@@ -168,8 +223,22 @@ const disc = Array.from({ length: 190 }, () => {
   };
 });
 
-const world = (sx, sy) => ({ x: (sx - W/2)/cam.z + cam.x, y: (sy - H/2)/cam.z + cam.y });
-const screenOf = (p) => ({ x: (p.x - cam.x) * cam.z + W/2, y: (p.y - cam.y) * cam.z + H/2 });
+// Heading is applied as a rotation about the ship. -rot on the way out, +rot on
+// the way back, so a click still lands on the thing under the cursor.
+const screenOf = (p) => {
+  const dx = (p.x - cam.x) * cam.z, dy = (p.y - cam.y) * cam.z;
+  const c = Math.cos(-cam.rot), sn = Math.sin(-cam.rot);
+  return { x: dx * c - dy * sn + W / 2, y: dx * sn + dy * c + H / 2 };
+};
+const world = (sx, sy) => {
+  const dx = sx - W / 2, dy = sy - H / 2;
+  const c = Math.cos(cam.rot), sn = Math.sin(cam.rot);
+  return { x: (dx * c - dy * sn) / cam.z + cam.x, y: (dx * sn + dy * c) / cam.z + cam.y };
+};
+
+// The shortest way round. Easing a heading from 350 to 10 degrees the long way
+// spins the whole world through 340 of them, which is nauseating and wrong.
+const angleTo = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
 
 function makeMotes(n, spread) {
   return Array.from({ length: n }, () => ({
@@ -260,8 +329,9 @@ function tour(targets, opts) {
 }
 
 function aimCamera(target, mode) {
-  cam.tx = target.x; cam.ty = target.y;
-  cam.tz = mode === "gap" ? .8 : 1.28;
+  // Only the zoom. Position and heading come from the flight itself now — the
+  // ship is not aimed at a destination, it travels to one.
+  cam.tz = mode === "gap" ? 1.0 : 1.35;
 }
 
 // One leg of a journey. A quadratic arc rather than a straight line: a straight
@@ -297,8 +367,24 @@ function puff(x, y, n, spread, colour) {
 }
 
 function step(dt) {
-  cam.x = lerp(cam.x, cam.tx, 1 - Math.pow(.0022, dt/1000));
-  cam.y = lerp(cam.y, cam.ty, 1 - Math.pow(.0022, dt/1000));
+  // While flying, the ship's position IS the camera's, hard-set rather than
+  // eased: a cockpit that lags behind its own hull is a camera, not a cockpit.
+  // Everything else still eases, so idling and panning stay soft.
+  if (probe && probe.phase !== "arrive") {
+    const t = ease(probe.t);
+    const pos = probePos(probe, t);
+    const ahead = probePos(probe, Math.min(1, t + .02));
+    cam.x = cam.tx = pos.x;
+    cam.y = cam.ty = pos.y;
+    // Face where you are going. +PI/2 because the canvas has y pointing down
+    // and the cockpit looks up the screen.
+    cam.trot = Math.atan2(ahead.y - pos.y, ahead.x - pos.x) + Math.PI / 2;
+    cam.rot = lerp(cam.rot, angleTo(cam.rot, cam.trot), 1 - Math.pow(.002, dt / 1000));
+  } else {
+    cam.x = lerp(cam.x, cam.tx, 1 - Math.pow(.0022, dt/1000));
+    cam.y = lerp(cam.y, cam.ty, 1 - Math.pow(.0022, dt/1000));
+    cam.rot = lerp(cam.rot, angleTo(cam.rot, cam.trot), 1 - Math.pow(.02, dt / 1000));
+  }
   cam.z = lerp(cam.z, cam.tz, 1 - Math.pow(.004, dt/1000));
 
   for (const b of bodies) {
@@ -373,7 +459,7 @@ function step(dt) {
     if (p.t >= 1) {
       p.onDone?.();
       probe = null;
-      cam.tx = 0; cam.ty = 0; cam.tz = 1;
+      cam.tx = 0; cam.ty = 0; cam.tz = 1; cam.trot = 0;
       return;
     }
   }
@@ -386,9 +472,11 @@ function draw(now) {
   ctx.fillRect(0, 0, W, H);
 
   // Parallax starfield. Depth is what stops a pan feeling like a slide.
+  const cs = Math.cos(-cam.rot), ss = Math.sin(-cam.rot);
   for (const s of stars) {
-    const sx = (s.x - cam.x * s.depth) * cam.z + W/2;
-    const sy = (s.y - cam.y * s.depth) * cam.z + H/2;
+    const px = (s.x - cam.x * s.depth) * cam.z, py = (s.y - cam.y * s.depth) * cam.z;
+    const sx = px * cs - py * ss + W/2;
+    const sy = px * ss + py * cs + H/2;
     if (sx < -40 || sx > W + 40 || sy < -40 || sy > H + 40) continue;
     ctx.globalAlpha = (.35 + .65 * (Math.sin(now * .0009 + s.tw) * .5 + .5)) * .8;
     ctx.fillStyle = "#cfd4ff";
@@ -579,34 +667,24 @@ function draw(now) {
   }
   ctx.globalAlpha = 1;
 
-  // The probe and its wake.
+  // The wake, still drawn: it is behind you now rather than ahead of you, and
+  // seeing where you came from is most of what makes movement legible.
   if (probe) {
     ctx.lineCap = "round";
     for (let i = 1; i < probe.trail.length; i++) {
       const sa = screenOf(probe.trail[i - 1]), sb = screenOf(probe.trail[i]);
-      ctx.globalAlpha = Math.max(0, probe.trail[i].life) * .55;
+      ctx.globalAlpha = Math.max(0, probe.trail[i].life) * .4;
       ctx.strokeStyle = probe.mode === "gap" ? "#c98a3a" : "#ED7100";
-      ctx.lineWidth = Math.max(.6, 2.6 * (i / probe.trail.length) * cam.z);
+      ctx.lineWidth = Math.max(.6, 2.2 * (i / probe.trail.length) * cam.z);
       ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
     }
     ctx.globalAlpha = 1;
-
-    const t = probe.phase === "arrive" ? 1 : ease(probe.t);
-    const pos = probePos(probe, t);
-    const ahead = probePos(probe, Math.min(1, t + .012));
-    const s = screenOf(pos);
-    ctx.save();
-    ctx.translate(s.x, s.y);
-    ctx.rotate(probe.phase === "arrive" ? now * .003 : Math.atan2(ahead.y - pos.y, ahead.x - pos.x));
-    ctx.fillStyle = "#fff";
-    ctx.shadowColor = "#ED7100"; ctx.shadowBlur = 14;
-    const k = 7 * Math.max(cam.z, .8);
-    ctx.beginPath();
-    ctx.moveTo(k, 0); ctx.lineTo(-k * .7, k * .6); ctx.lineTo(-k * .35, 0); ctx.lineTo(-k * .7, -k * .6);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-    ctx.shadowBlur = 0;
   }
+
+  // NO SHIP IS DRAWN. You are inside it.
+  drawTether(now);
+  drawReticle(now);
+  updateHud(now);
 }
 
 // Half the accretion disc at a time: side = -1 draws what is behind the hole,
@@ -615,7 +693,7 @@ function draw(now) {
 //
 // Inner material is hotter and moving faster, so it runs white; outer material
 // cools to orange. One side is brighter than the other because it is rotating
-// toward the viewer — a symmetric disc reads as a logo rather than as physics.
+// toward the viewer - a symmetric disc reads as a logo rather than as physics.
 function drawDisc(hs, side, now, flare) {
   const tilt = .30;
   for (const d of disc) {
@@ -623,8 +701,8 @@ function drawDisc(hs, side, now, flare) {
     if (side < 0 ? sy > 0 : sy <= 0) continue;
     const x = hs.x + Math.cos(d.a) * d.r * cam.z;
     const y = hs.y + sy * d.r * tilt * cam.z;
-    const heat = 1 - Math.min(1, (d.r - 32) / 50);          // 1 inner, 0 outer
-    const dop = .35 + .65 * (.5 + .5 * Math.cos(d.a - 0.4)); // brighter approaching
+    const heat = 1 - Math.min(1, (d.r - 32) / 50);
+    const dop = .35 + .65 * (.5 + .5 * Math.cos(d.a - 0.4));
     const a = (.20 + heat * .55) * dop * d.w * (1 + flare * .8);
     ctx.globalAlpha = Math.min(1, a);
     ctx.fillStyle = heat > .66 ? "#fff4e2" : heat > .33 ? "#ffc06a" : "#ED7100";
@@ -633,6 +711,67 @@ function drawDisc(hs, side, now, flare) {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+}
+
+// THE TETHER. It is never not drawn.
+//
+// The ship goes out to a tool and comes back, and the line home is the thing
+// that says why: a tool is not where the answer lives, it is somewhere the
+// model reached. Cut the tether and a tool is just an API. The whole argument
+// of this project is that the line exists.
+function drawTether(now) {
+  const hs = screenOf(home);
+  const cx = W / 2, cy = H / 2;
+  const dist = Math.hypot(hs.x - cx, hs.y - cy);
+  if (dist < 6) return;
+
+  const grad = ctx.createLinearGradient(cx, cy, hs.x, hs.y);
+  grad.addColorStop(0, "rgba(255,200,130,.85)");
+  grad.addColorStop(1, "rgba(237,113,0,.20)");
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([9, 7]);
+  ctx.lineDashOffset = -(now * .05) % 16;   // pulling inward, toward the hole
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(hs.x, hs.y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// The reticle. Fixed at the centre, because the centre is where the ship is.
+function drawReticle(now) {
+  const cx = W / 2, cy = H / 2;
+  const flying = probe && probe.phase !== "arrive";
+  ctx.strokeStyle = flying ? "rgba(255,200,130,.75)" : "rgba(237,113,0,.42)";
+  ctx.lineWidth = 1.2;
+  const g = 9, a = 20;
+  for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + d[0] * g, cy + d[1] * g);
+    ctx.lineTo(cx + d[0] * a, cy + d[1] * a);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3.2 + (flying ? Math.sin(now * .012) * .9 : 0), 0, TAU);
+  ctx.stroke();
+}
+
+// Numbers that mean something. Range is in world units, which are arbitrary -
+// but the ratio is not, and watching it fall as you close on a tool is the
+// whole point of showing it. Throttled: the DOM does not need 60 writes a
+// second to tell you a number is going down.
+let hudAt = 0;
+function updateHud(now) {
+  if (now - hudAt < 90) return;
+  hudAt = now;
+  const range = Math.round(Math.hypot(cam.x - home.x, cam.y - home.y));
+  const flying = probe && probe.phase !== "arrive";
+  document.getElementById("t-range").textContent = range;
+  document.getElementById("t-state").textContent = range < 8 ? "MOORED" : "HELD";
+  document.getElementById("t-vel").textContent = flying
+    ? Math.round(300 + 900 * Math.sin(Math.PI * Math.min(1, probe.t))) : "0";
+  document.getElementById("t-target").textContent = probe
+    ? String(probe.mode === "gap" ? "OPEN SPACE"
+        : (probe.target && (probe.target.name || probe.target.tool_id)) || "-").slice(0, 22).toUpperCase()
+    : "HOLDING";
 }
 
 let last = performance.now();
