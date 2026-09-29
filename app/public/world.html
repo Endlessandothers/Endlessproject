@@ -436,6 +436,49 @@ function addGapCloud(centre, label, confirmed) {
   gapClouds.push({ centre, confirmed });
 }
 
+// ---------------------------------------------------------------- the open web
+//
+// NOT A PLANET, DELIBERATELY. Every other body out here is a reviewed tool
+// with a handler, an allowlist and a version. This one is the open internet:
+// it runs inside the model's API, nobody here wrote it, nobody here approved
+// it, and what comes back is whatever the web said today.
+//
+// So it is drawn as weather rather than as a world — a large, soft, drifting
+// haze with no surface. You can fly to it and it answers, and it never quite
+// resolves into something solid. That is the honest picture.
+const webCloud = (() => {
+  const group = new T.Group();
+  const R = 300, N = 2200;
+  const pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const u = Math.random() * 2 - 1, th = Math.random() * TAU;
+    const r = Math.pow(Math.random(), .42) * 26;
+    const k = Math.sqrt(1 - u * u);
+    pos[i*3] = Math.cos(th) * k * r;
+    pos[i*3+1] = u * r * .8;
+    pos[i*3+2] = Math.sin(th) * k * r;
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute("position", new T.BufferAttribute(pos, 3));
+  group.add(new T.Points(g, new T.PointsMaterial({
+    color: 0x7fc4ff, size: 1.5, transparent: true, opacity: .42,
+    blending: T.AdditiveBlending, depthWrite: false,
+  })));
+  const hl = new T.Sprite(new T.SpriteMaterial({
+    map: glowTex, blending: T.AdditiveBlending, depthWrite: false,
+    transparent: true, color: 0x66b0ff, opacity: .32,
+  }));
+  hl.scale.set(110, 110, 1);
+  group.add(hl);
+  const lab = labelSprite("the open web", "#9fd4ff");
+  lab.position.y = 40;
+  group.add(lab);
+  scene.add(group);
+  // Furthest out of anything that answers, and slowest, because it is not in
+  // orbit around this system in any meaningful sense.
+  return { group, R, a: 2.1, inc: .22, rate: 30 / Math.pow(R, 1.5), radius: 26 };
+})();
+
 // ---------------------------------------------------------------- the tether
 //
 // It is never not drawn. The ship goes out to a tool and comes back, and the
@@ -526,6 +569,10 @@ function frame(now) {
       m.mesh.position.set(Math.cos(m.a) * m.d, Math.sin(m.a) * m.d * .3, Math.sin(m.a) * m.d);
     }
   }
+
+  webCloud.a += webCloud.rate * s;
+  webCloud.group.position.copy(bodyPos(webCloud));
+  webCloud.group.rotation.y += .05 * s;
 
   // Differential rotation is the entire reason the disc is particles.
   for (let i = 0; i < DISC_N; i++) {
@@ -644,6 +691,24 @@ async function ask() {
     return;
   }
 
+  // 1b. OFF THE OPEN WEB. Fly out to the haze. This is a gap as well as an
+  // answer: going to the internet means no tool here covered it, and somebody
+  // could wrap that source into one that is structured, fast and cheap.
+  if (d.answered_by === "web") {
+    setStatus(`no tool covers that — searching the open web (${d.web_searches ?? 1})`);
+    beginFlight([{
+      body: webCloud, name: "THE OPEN WEB",
+      point: bodyPos(webCloud).clone()
+        .add(bodyPos(webCloud).clone().normalize().multiplyScalar(90))
+        .add(new T.Vector3(0, 30, 0)),
+    }], {
+      mode: "find",
+      onArrive: () => { setStatus(""); showAnswer(q, d); },
+      onDone: () => { $("#go").disabled = false; },
+    });
+    return;
+  }
+
   // DISTINCT tools, in the order first reached. Three calls to one tool is one
   // place to visit, not three identical flights.
   const seen = new Set();
@@ -689,6 +754,9 @@ function showAnswer(q, d) {
   const via = d.answered_by === "model"
     ? `answered by <b>Claude</b> — no tool needed` +
       (d.gap_logged ? `, but expensively, so it is logged as a tool worth having` : "")
+    : d.answered_by === "web"
+      ? `answered off <b>the open web</b> — ${d.web_searches ?? 1} search` +
+        ((d.web_searches ?? 1) === 1 ? "" : "es") + `, no tool covered it`
     : n > 1 ? `answered from <b>${n} tool calls</b>`
             : `answered by <b>${esc(d.tool_name ?? d.tool_id)}</b>${d.ms ? ` · ${esc(d.ms)}ms` : ""}`;
 
@@ -697,6 +765,14 @@ function showAnswer(q, d) {
     `<p class="a">${esc(d.answer ?? "")}</p>` +
     `<p class="via">${via}</p>` +
     (d.error ? `<div class="gap" style="margin-top:9px">${esc(d.error)}</div>` : "") +
+    // The searches it ran, verbatim. An answer off the open web is the one kind
+    // here with no reviewed code behind it, so what it asked for is the only
+    // thing a reader can check it against.
+    (d.answered_by === "web"
+      ? `<div class="gap" style="margin-top:10px">Recorded as a tool worth building — nothing here covered it.` +
+        ((d.web_queries ?? []).length
+          ? `<br><span style="opacity:.75">searched: ${d.web_queries.map(esc).join(" · ")}</span>` : "") +
+        `</div>` : "") +
     (n ? `<details><summary>what it ran, and what came back</summary>` +
          d.calls.map(c => `<pre>${esc(c.tool_id + " " + JSON.stringify(c.input))}\n` +
            `${esc(JSON.stringify(c.error ? { error: c.error } : c.result, null, 2))}</pre>`).join("") +

@@ -121,6 +121,18 @@ variable "answer_expensive_tokens" {
   default     = 1200
 }
 
+variable "answer_web_search" {
+  description = "Whether answer-fn offers Anthropic's server-side web search. It runs inside the API rather than in the sandbox, so it has no handler, no allowlist and no registry row — worth stating, because every other tool here is code somebody reviewed before it was allowed to run. Set false to take the model back off the open internet."
+  type        = bool
+  default     = true
+}
+
+variable "answer_web_max_uses" {
+  description = "Searches allowed per question. A ceiling rather than a target: one measured search-backed answer used 14,574 input tokens against about 500 for one answered from knowledge, and each search is billed on top of that. Three is enough to check a fact from more than one source and short of a model researching a topic on someone else's money."
+  type        = number
+  default     = 3
+}
+
 variable "answer_max_turns" {
   description = "How many times the model may reach for tools again after seeing results. One turn was never enough: a question like 'compare the air quality in Lisbon and Porto' emits two tool_use blocks at once, and every one of them must be answered by a tool_result in the very next message or the API rejects the whole request. Four is enough for gather-then-compare and short of a loop that outlives the Lambda, because the fail-soft path cannot run when the function itself is killed."
   type        = number

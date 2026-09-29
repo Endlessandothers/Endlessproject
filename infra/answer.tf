@@ -142,6 +142,8 @@ resource "aws_lambda_function" "answer" {
       GAPS_TABLE              = aws_dynamodb_table.gaps.name
       ANSWER_EXPENSIVE_TOKENS = tostring(var.answer_expensive_tokens)
       ANSWER_MAX_TURNS        = tostring(var.answer_max_turns)
+      ANSWER_WEB_SEARCH       = var.answer_web_search ? "1" : "0"
+      ANSWER_WEB_MAX_USES     = tostring(var.answer_web_max_uses)
     }
   }
 

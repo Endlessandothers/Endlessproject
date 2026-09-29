@@ -59,6 +59,15 @@ const EXPENSIVE_OUTPUT_TOKENS = Number(process.env.ANSWER_EXPENSIVE_TOKENS || 12
 // "compare A and B and say which is better", short of a loop that outlives the
 // Lambda - the fail-soft path cannot run when the function itself is killed.
 const MAX_TURNS = Number(process.env.ANSWER_MAX_TURNS || 4);
+// THE OPEN WEB, AS A LAST RESORT BEFORE GIVING UP.
+//
+// Anthropic runs this one: it executes inside the API rather than in our
+// sandbox, so there is no handler, no allowlist and no registry row. That is
+// worth saying plainly, because every other tool here is code somebody
+// reviewed before it was allowed to run.
+const WEB_SEARCH = process.env.ANSWER_WEB_SEARCH !== "0";
+const WEB_MAX_USES = Number(process.env.ANSWER_WEB_MAX_USES || 3);
+const WEB_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: WEB_MAX_USES };
 
 const lambda = new LambdaClient({});
 const ssm = new SSMClient({});
@@ -122,24 +131,35 @@ const toolNameFor = (id) => "use_" + String(id).replace(/[^a-zA-Z0-9_]/g, "_").s
 
 export const UNMET = "record_unmet_need";
 
+// FOUR OPTIONS, IN A DELIBERATE ORDER OF PREFERENCE.
+//
+// The order is by cost and by directness, and it is stated rather than implied
+// because a model given a search tool will reach for it far more often than it
+// needs to. A measured web-search answer cost 14,574 input tokens against
+// roughly 500 for one answered from knowledge — thirty times the price to
+// answer "what is the capital of France" no better.
 export const SYSTEM = [
-  "You answer questions. You also have access to a registry of small tools.",
+  "You answer questions. You have a registry of small tools, and a web search.",
   "",
-  "Answer directly, from what you know, whenever you reliably can. Most questions do not need a tool:",
+  "1. ANSWER DIRECTLY, from what you know, whenever you reliably can. Most questions need nothing else:",
   "stable facts, definitions, explanations, reasoning, arithmetic, writing, opinions about known things.",
-  "Using a tool for those wastes time and money and makes the answer no better.",
+  "Reaching for a tool on those wastes time and money and makes the answer no better.",
   "",
-  "Use a tool when knowing is not enough — when the answer depends on something you cannot know:",
-  "anything live or changing (weather, air quality, prices, the current time, recent events),",
-  "anything that must be looked up in an authoritative source rather than recalled,",
-  "and anything where being out of date would make the answer wrong.",
-  "Never guess at live data. An out-of-date number stated confidently is worse than no answer.",
+  "2. USE A REGISTRY TOOL when knowing is not enough and one of them does the job. They are exact,",
+  "fast and cheap: live or changing data they cover (weather, air quality, prices, the current time),",
+  "or an authoritative lookup rather than a recollection. Prefer a registry tool over searching,",
+  "always — searching for something a tool already returns precisely is the worst of both.",
   "",
-  `Call ${UNMET} when the question needs something you cannot know and no tool here provides it,`,
-  "or when it asks you to take an action in the world rather than to know something.",
-  "Do not call it merely because a question is hard — hard questions you can reason through are yours to answer.",
+  "3. SEARCH THE WEB only when neither of those will do: something current, specific or verifiable",
+  "that you cannot know and no registry tool covers. Searching is slow and roughly thirty times the",
+  "cost of answering from knowledge, so it is a last resort before giving up, not a reflex.",
+  "Never guess at live data — an out-of-date number stated confidently is worse than no answer.",
   "",
-  "When a tool returns, answer in plain prose for someone who did not see the JSON:",
+  `4. CALL ${UNMET} when even a search will not do: the question asks you to take an ACTION in the`,
+  "world — book, send, buy, schedule — or needs private or credentialed data nobody can look up.",
+  "Do not call it merely because a question is hard. Hard questions you can reason through are yours.",
+  "",
+  "When anything returns, answer in plain prose for someone who did not see the JSON:",
   "two or three sentences, the actual numbers and names included, no preamble and no bullet lists.",
   "Never invent a value a tool did not return.",
 ].join("\n");
@@ -204,6 +224,9 @@ export const handler = async (event) => {
         input_schema: toJsonSchema(r.input_schema),
       };
     });
+    // The web goes in BEFORE the giving-up tool, so the order in the list matches
+    // the order in the instructions.
+    if (WEB_SEARCH) tools.push(WEB_TOOL);
     tools.push(UNMET_TOOL);
 
     const ai = await client();
@@ -217,16 +240,65 @@ export const handler = async (event) => {
     }, { timeout: TIMEOUT_MS });
 
     const textOf = (m) => (m.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+    // Only CLIENT tool calls. A server tool has type "server_tool_use", runs
+    // inside the API and has already returned by the time we see the message,
+    // so it must never enter the loop that waits for us to execute something.
     const usesOf = (m) => (m.content ?? []).filter((b) => b.type === "tool_use");
+    const websOf = (m) => (m.usage?.server_tool_use?.web_search_requests ?? 0);
+    const queriesOf = (m) => (m.content ?? [])
+      .filter((b) => b.type === "server_tool_use" && b.name === "web_search")
+      .map((b) => b.input?.query).filter(Boolean);
+
+    let webSearches = 0, webQueries = [];
 
     let msg = first;
     let inTokens = first.usage?.input_tokens ?? 0;
     let outTokens = first.usage?.output_tokens ?? 0;
+    webSearches += websOf(first);
+    webQueries = webQueries.concat(queriesOf(first));
 
-    // ---------------------------------------------------------------- 1. it knew
+    // ---------------------------------------------------------------- 1. it knew, or it searched
     if (!usesOf(msg).length) {
       const answer = textOf(msg);
-      // Answered without a tool. Not a gap in itself - but if it cost a lot to
+
+      // A WEB SEARCH IS ITSELF THE DEMAND SIGNAL, and this is the decision that
+      // keeps the gap log alive now that the model can reach the open internet.
+      //
+      // Left alone, search would silence this project. Almost nothing is an
+      // unmet need if the model can go and look it up, and the gap log — the
+      // one artefact here that cannot be rebuilt from anything else — would
+      // quietly go empty while everything appeared to work better than ever.
+      //
+      // But going to the open web is exactly what a missing tool looks like.
+      // It means no registry tool covered this, and somebody could wrap that
+      // source into one that is structured, fast and cheap. The measurement
+      // makes the case on its own: a search-backed answer took 14,574 input
+      // tokens where one from knowledge takes about 500, and each search is
+      // billed on top. So a search answers the question AND records that
+      // answering it this way should not have been necessary.
+      if (webSearches > 0) {
+        const gap_id = await recordGap(deferred, {
+          reason: "answered_by_web_search", decided_by: MODEL,
+          web_searches: webSearches,
+          web_queries: webQueries.slice(0, 5).map((q) => String(q).slice(0, 200)),
+          input_tokens: inTokens, output_tokens: outTokens,
+        });
+
+        console.log(JSON.stringify({
+          metric: "answer", route: "web", searches: webSearches,
+          queries: webQueries, in: inTokens, out: outTokens, gap_id,
+        }));
+
+        return json(200, {
+          question, answer, tool_id: null, answered_by: "web",
+          web_searches: webSearches, web_queries: webQueries,
+          tokens: { in: inTokens, out: outTokens },
+          needed_a_tool: true, gap_logged: gap_id !== null, calls: [],
+          note: "Answered off the open web because no tool here covered it. Recorded as a tool worth building.",
+        });
+      }
+
+      // Answered from knowledge. Not a gap in itself - but if it cost a lot to
       // answer, a tool would have paid for itself, and that is a different kind
       // of demand worth recording.
       const expensive = outTokens >= EXPENSIVE_OUTPUT_TOKENS;
@@ -247,7 +319,7 @@ export const handler = async (event) => {
         tokens: { in: inTokens, out: outTokens },
         // Said plainly rather than left to be inferred. "No tool was used" and
         // "no tool exists" are different facts and were being conflated.
-        needed_a_tool: false, gap_logged: gap_id !== null, calls: [],
+        needed_a_tool: false, gap_logged: gap_id !== null, calls: [], web_searches: 0,
         ...(expensive ? { note: "Answered without a tool, but expensively - recorded as a tool worth having." } : {}),
       });
     }
@@ -336,6 +408,8 @@ export const handler = async (event) => {
 
       inTokens += msg.usage?.input_tokens ?? 0;
       outTokens += msg.usage?.output_tokens ?? 0;
+      webSearches += websOf(msg);
+      webQueries = webQueries.concat(queriesOf(msg));
       turns++;
     }
 
@@ -356,6 +430,10 @@ export const handler = async (event) => {
         ? "Stopped after too many steps. What was gathered is below."
         : "The tools ran but produced nothing to report."),
       answered_by: "tool", needed_a_tool: true, gap_logged: false,
+      // A registry tool answered, so this is not a gap even if the model also
+      // searched along the way — but the count travels, because a tool that
+      // keeps needing a search beside it is telling you something.
+      web_searches: webSearches, web_queries: webQueries,
       // Every call, in order, so a question answered from three tools can be
       // checked against all three rather than only the first.
       calls, turns, exhausted,
