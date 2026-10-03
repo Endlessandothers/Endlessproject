@@ -100,6 +100,32 @@
     background:transparent;color:var(--hud);font:11px ui-monospace,monospace;
     letter-spacing:.09em;text-transform:uppercase;cursor:pointer}
 
+  /* The canopy fades rather than vanishing, so leaving the ship reads as a
+     thing that happens rather than a thing that cuts. */
+  .canopy{transition:opacity .55s ease}
+  .canopy.out{opacity:0}
+
+  /* Flight controls. Real controls, so they take pointer events even though
+     the HUD around them does not. */
+  .flt{position:fixed;left:calc(2vw + 10px);top:50%;transform:translateY(-50%);z-index:7;
+    display:flex;flex-direction:column;gap:6px;pointer-events:auto}
+  .flt button{padding:7px 11px;border-radius:6px;cursor:pointer;min-width:94px;
+    border:1px solid rgba(237,113,0,.3);background:rgba(12,9,8,.78);color:var(--hud);
+    font:10px/1.3 ui-monospace,monospace;letter-spacing:.11em;text-transform:uppercase}
+  .flt button:hover{border-color:rgba(255,190,120,.7)}
+  .flt button.on{background:rgba(237,113,0,.88);color:#140d06;font-weight:700}
+  .flt .hint{font:9px/1.5 ui-monospace,monospace;letter-spacing:.07em;
+    color:rgba(160,150,145,.5);text-transform:uppercase;max-width:104px;pointer-events:none}
+
+  /* Thumbstick, touch only. A keyboard is the better control and most people
+     reading this will not have one. */
+  .stick{position:fixed;left:7vw;bottom:24vh;width:104px;height:104px;z-index:7;
+    border-radius:50%;border:1px solid rgba(237,113,0,.26);background:rgba(10,8,10,.4);
+    display:none;touch-action:none}
+  .stick i{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;
+    border-radius:50%;background:rgba(237,113,0,.55);box-shadow:0 0 16px rgba(237,113,0,.5)}
+  body.touch .stick{display:block}
+
   .brand{position:fixed;top:2.2vh;left:50%;transform:translateX(-50%);z-index:6;
     font:11px/1.6 ui-monospace,monospace;letter-spacing:.3em;text-transform:uppercase;
     color:rgba(255,190,120,.45);pointer-events:none;text-align:center}
@@ -153,6 +179,14 @@
     <button data-sp="2.1" aria-pressed="false">Burn</button>
   </div>
 </div>
+
+<div class="flt" id="flt">
+  <button id="mode">Leave ship</button>
+  <button id="home">Return</button>
+  <div class="hint" id="navhint">drag to look · wasd to move · click a world</div>
+</div>
+
+<div class="stick" id="stick"><i id="stickNub"></i></div>
 
 <div class="console">
   <div class="ask">
@@ -556,6 +590,46 @@ const webCloud = (() => {
   return { group, R: 300, a: 2.1, inc: .22, rate: 30 / Math.pow(300, 1.5), radius: 26 };
 })();
 
+// ---------------------------------------------------------------- the ship
+//
+// Only ever seen from outside. In the cockpit you are inside it and it would
+// be a hull filling the glass; the moment you step out it has to exist, or
+// "leaving the ship" is just the canopy fading and nothing else happening.
+//
+// Deliberately small and plain. It is not the subject — the thing it is
+// moored to is.
+const ship = (() => {
+  const g = new T.Group();
+  const shell = new T.MeshStandardMaterial({ color: 0x6d737f, roughness: .42, metalness: .72 });
+  const hull = new T.Mesh(new T.CapsuleGeometry(1.5, 4.4, 6, 16), shell);
+  hull.rotation.x = Math.PI / 2;
+  g.add(hull);
+  const nose = new T.Mesh(new T.ConeGeometry(1.5, 3, 16), shell);
+  nose.rotation.x = -Math.PI / 2; nose.position.z = -4.3;
+  g.add(nose);
+  for (const sx of [-1, 1]) {
+    const wing = new T.Mesh(new T.BoxGeometry(3.4, .3, 2.2),
+      new T.MeshStandardMaterial({ color: 0x4a4f59, roughness: .55, metalness: .6 }));
+    wing.position.set(sx * 2.4, -.2, 1.1);
+    wing.rotation.z = sx * .22;
+    g.add(wing);
+  }
+  // Running lights, additive, so they read as lit rather than painted.
+  for (const [x, y, z, c] of [[-2.4,.1,2.1,0xff5a3c],[2.4,.1,2.1,0x4cff8a],[0,.9,2.6,0xffc078]]) {
+    const l = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color: c, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity: .9 }));
+    l.position.set(x, y, z); l.scale.set(2.6, 2.6, 1);
+    g.add(l);
+  }
+  const thrust = new T.Sprite(new T.SpriteMaterial({
+    map: glowTex, color: 0xff9a3c, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }));
+  thrust.position.z = 4.2; thrust.scale.set(7, 7, 1);
+  g.add(thrust);
+  g.visible = false;
+  scene.add(g);
+  return { group: g, thrust };
+})();
+
 // ---------------------------------------------------------------- the tether
 //
 // Never not drawn. The ship goes out to a tool and comes back, and the line
@@ -745,6 +819,176 @@ function beginFlight(stops, opts) {
   };
 }
 
+// ---------------------------------------------------------------- controls
+//
+// YOU FLY IT NOW.
+//
+// The camera used to be driven entirely by whatever the last question did:
+// out to a tool, pause, back to the mooring, and no way to go anywhere on
+// your own. Three things change that — free look, free movement, and the
+// right to interrupt.
+//
+// Any manual input cancels an automatic flight immediately rather than
+// queueing behind it. A control you have to wait for is not a control.
+const ctrl = {
+  yaw: 0, pitch: 0,
+  vel: new T.Vector3(),
+  keys: new Set(),
+  drag: null,
+  touchMove: new T.Vector2(),
+  eva: false,
+};
+
+// Seed the angles from where the camera already looks, so taking control for
+// the first time does not snap the view.
+{
+  const e = new T.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+  ctrl.yaw = e.y; ctrl.pitch = e.x;
+}
+
+const isTouch = matchMedia("(pointer: coarse)").matches;
+if (isTouch) document.body.classList.add("touch");
+
+function takeControl() {
+  if (flight) { flight = null; setStatus(""); $("#go").disabled = false; }
+}
+
+// ------------------------------------------------ look
+const canvas = $("#c");
+canvas.addEventListener("pointerdown", (e) => {
+  ctrl.drag = { x: e.clientX, y: e.clientY, moved: false, id: e.pointerId };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!ctrl.drag || ctrl.drag.id !== e.pointerId) return;
+  const dx = e.clientX - ctrl.drag.x, dy = e.clientY - ctrl.drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 4) {
+    if (!ctrl.drag.moved) takeControl();
+    ctrl.drag.moved = true;
+  }
+  ctrl.drag.x = e.clientX; ctrl.drag.y = e.clientY;
+  if (!ctrl.drag.moved) return;
+  ctrl.yaw -= dx * .0032;
+  // Clamped just short of vertical. Passing straight up flips the horizon and
+  // there is no good way to recover from it with a drag.
+  ctrl.pitch = Math.max(-1.45, Math.min(1.45, ctrl.pitch - dy * .0032));
+});
+canvas.addEventListener("pointerup", (e) => {
+  const d = ctrl.drag; ctrl.drag = null;
+  if (!d || d.moved) return;
+  clickAt(e.clientX, e.clientY);
+});
+canvas.addEventListener("pointercancel", () => { ctrl.drag = null; });
+
+// ------------------------------------------------ click a world to go to it
+const ray = new T.Raycaster();
+const ndc = new T.Vector2();
+function clickAt(px, py) {
+  ndc.set((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  // Generous, because a distant tool is a few pixels across and asking
+  // somebody to hit that is not navigation.
+  ray.params.Points.threshold = 6;
+  const meshes = bodies.map(b => b.mesh);
+  const hit = ray.intersectObjects(meshes, false)[0];
+  if (!hit) return;
+  const b = bodies.find(x => x.mesh === hit.object);
+  if (!b) return;
+  takeControl();
+  setStatus("course laid for " + (b.name ?? b.tool_id));
+  beginFlight([{ body: b, point: approachPoint(b), name: b.name ?? b.tool_id }], {
+    mode: "find",
+    onArrive: () => { setStatus(""); showTool(b); },
+  });
+}
+
+// A world opened by hand rather than by an answer. No prose, because nothing
+// asked a question — just what the registry knows about it.
+function showTool(b) {
+  const pct = (v) => v == null ? "—" : Math.round(v * 100) + "%";
+  showPanel(
+    `<p class="q">${esc(b.tool_id)}${b.version ? " · v" + esc(b.version) : ""}</p>` +
+    `<p class="a" style="font-size:1.05rem">${esc(b.name ?? b.tool_id)}</p>` +
+    `<p class="via"><b>${b.mass ?? 0}</b> calls · <b>${b.distinct_callers ?? 0}</b> callers · ` +
+    `reliability <b>${pct(b.brightness)}</b> · <b>${b.dependents ?? 0}</b> built on it</p>` +
+    (b.lit ? "" : `<div class="gap" style="margin-top:10px">Never called. Nothing is known about ` +
+      `whether it works, which is why it is unlit rather than dim.</div>`) +
+    `<div class="row"><button id="close">Close</button></div>`);
+  $("#close").onclick = hidePanel;
+}
+
+// ------------------------------------------------ move
+addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if ("wasdqe".includes(k) || k === " " || k.startsWith("arrow") || k === "shift") {
+    if (!ctrl.keys.size) takeControl();
+    ctrl.keys.add(k);
+    if (k === " ") e.preventDefault();
+  }
+});
+addEventListener("keyup", (e) => ctrl.keys.delete(e.key.toLowerCase()));
+addEventListener("blur", () => ctrl.keys.clear());
+
+// Touch thumbstick. Forward is up, because every other control on a phone
+// agrees that up is away.
+{
+  const pad = $("#stick"), nub = $("#stickNub");
+  let active = null;
+  const set = (dx, dy) => {
+    const m = Math.min(1, Math.hypot(dx, dy) / 42);
+    const a = Math.atan2(dy, dx);
+    nub.style.transform = `translate(${Math.cos(a) * m * 32}px, ${Math.sin(a) * m * 32}px)`;
+    ctrl.touchMove.set(Math.cos(a) * m, Math.sin(a) * m);
+  };
+  const stop = () => { active = null; nub.style.transform = ""; ctrl.touchMove.set(0, 0); };
+  pad.addEventListener("pointerdown", (e) => {
+    active = e.pointerId; pad.setPointerCapture(e.pointerId);
+    const r = pad.getBoundingClientRect();
+    takeControl(); set(e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2);
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (active !== e.pointerId) return;
+    const r = pad.getBoundingClientRect();
+    set(e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2);
+  });
+  pad.addEventListener("pointerup", stop);
+  pad.addEventListener("pointercancel", stop);
+}
+
+// ------------------------------------------------ in and out of the ship
+function setEva(on) {
+  ctrl.eva = on;
+  document.querySelector(".canopy").classList.toggle("out", on);
+  ship.group.visible = on;
+  $("#mode").textContent = on ? "Board ship" : "Leave ship";
+  $("#mode").classList.toggle("on", on);
+  $("#navhint").textContent = on
+    ? "outside the ship · it holds your place"
+    : "drag to look · wasd to move · click a world";
+  if (on) {
+    // Park it where you were standing and drift out sideways, so the hull is
+    // beside you rather than inside your head.
+    ship.group.position.copy(camera.position);
+    ship.group.quaternion.copy(camera.quaternion);
+    const right = new T.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const down = new T.Vector3(0, -1, 0).applyQuaternion(camera.quaternion);
+    ship.group.position.addScaledVector(right, 9).addScaledVector(down, 2.5);
+  }
+}
+$("#mode").onclick = () => setEva(!ctrl.eva);
+
+$("#home").onclick = () => {
+  takeControl();
+  setStatus("returning to the mooring");
+  flight = {
+    curve: legTo(camera.position.clone(), MOORING), t: 0,
+    dur: durationFor(camera.position.distanceTo(MOORING)),
+    phase: "home", wait: 0, stops: [], target: { name: "MOORING" },
+    onDone: () => setStatus(""),
+  };
+};
+
 // ---------------------------------------------------------------- hud
 let hudAt = 0;
 function hud(now) {
@@ -802,8 +1046,10 @@ function frame(now) {
   keyLight.intensity = 2200 + holePulse * 4200;
   compositeMat.uniforms.bloom.value = .85 + holePulse * .9;
 
-  // ------------------------------------------------ fly
+  // ------------------------------------------------ fly, or be flown
   let targetBank = 0;
+  let thrusting = false;
+
   if (flight) {
     const f = flight;
     if (f.phase === "out" || f.phase === "home") {
@@ -812,15 +1058,14 @@ function frame(now) {
       camera.position.copy(f.curve.getPoint(e));
       const ahead = f.curve.getPoint(Math.min(1, e + .05));
       lookAt.lerp(f.phase === "home" ? home : ahead, .11);
+      thrusting = true;
 
-      // BANK INTO THE TURN. The curve bows sideways; without roll the horizon
-      // stays dead level through it and the whole thing reads as a dolly on
-      // rails rather than as something flying.
+      // BANK INTO THE TURN. The path bows sideways; with the horizon dead
+      // level through it the whole thing reads as a dolly on rails.
       const p0 = f.curve.getPoint(Math.max(0, e - .04));
       const p1 = f.curve.getPoint(Math.min(1, e + .04));
-      const v0 = camera.position.clone().sub(p0);
-      const v1 = p1.clone().sub(camera.position);
-      const turn = new T.Vector3().crossVectors(v0, v1);
+      const turn = new T.Vector3().crossVectors(
+        camera.position.clone().sub(p0), p1.clone().sub(camera.position));
       targetBank = Math.max(-.55, Math.min(.55, turn.y * .00035));
 
       if (f.t >= 1) {
@@ -834,9 +1079,7 @@ function frame(now) {
     } else {
       f.wait += dt;
       if (f.target.body) lookAt.lerp(f.target.body.group.position ?? home, .05);
-      // Longer at the end of a journey than between stops: the last one is
-      // where the answer appears and reading it should not be a race.
-      const dwell = (f.stops.length ? 900 : (f.mode === "gap" ? 2400 : 2000)) / Math.max(.8, speed);
+      const dwell = (f.stops.length ? 900 : 1200) / Math.max(.8, speed);
       if (f.wait > dwell) {
         if (f.stops.length) {
           const next = f.stops.shift();
@@ -844,25 +1087,79 @@ function frame(now) {
           f.t = 0; f.phase = "out"; f.target = next;
           f.dur = durationFor(camera.position.distanceTo(next.point)) * .85;
         } else {
-          f.curve = legTo(camera.position.clone(), MOORING);
-          f.t = 0; f.phase = "home";
-          f.dur = durationFor(camera.position.distanceTo(MOORING));
+          // YOU STOP WHERE THE ANSWER CAME FROM.
+          //
+          // It used to turn round and fly back to the mooring on its own,
+          // which took the thing you came to see out of the window while you
+          // were still reading about it. Now the journey ends at the tool and
+          // the ship is yours again — Return goes home when you want it to.
+          f.onDone?.();
+          flight = null;
+          const e2 = new T.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+          ctrl.yaw = e2.y; ctrl.pitch = e2.x;
         }
       }
     }
   } else {
-    lookAt.lerp(home, .035);
-    camera.position.y = lerp(camera.position.y, MOORING.y + Math.sin(now * .0002) * 4.5, .015);
+    // ------------------------------------------------ you have the stick
+    const k = ctrl.keys;
+    const fwd = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0)
+              - ctrl.touchMove.y;
+    const strafe = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0)
+              + ctrl.touchMove.x;
+    const rise = (k.has(" ") || k.has("e") ? 1 : 0) - (k.has("shift") || k.has("q") ? 1 : 0);
+
+    if (fwd || strafe || rise) {
+      // Throttle drives movement as well as automatic flight, so one control
+      // means one thing everywhere.
+      const push = 140 * speed * s;
+      const q = camera.quaternion;
+      ctrl.vel.addScaledVector(new T.Vector3(0, 0, -1).applyQuaternion(q), fwd * push);
+      ctrl.vel.addScaledVector(new T.Vector3(1, 0, 0).applyQuaternion(q), strafe * push);
+      ctrl.vel.addScaledVector(UP, rise * push);
+      thrusting = true;
+    }
+    // Damped rather than stopped dead: in space nothing stops dead, and the
+    // coast is most of what makes moving feel like moving.
+    ctrl.vel.multiplyScalar(Math.pow(.06, s));
+    camera.position.addScaledVector(ctrl.vel, s);
+
+    // Far enough out and the whole system is a dot you cannot find your way
+    // back to, so the leash is generous but real.
+    const out = camera.position.length();
+    if (out > 1800) camera.position.multiplyScalar(1800 / out);
+  }
+
+  if (ctrl.eva) {
+    // The ship holds station where you left it, turning gently, so it reads
+    // as waiting rather than as scenery.
+    ship.group.rotateY(.12 * s);
+    ship.thrust.material.opacity = 0;
+  } else {
+    ship.thrust.material.opacity = thrusting ? .55 + Math.random() * .25 : 0;
   }
 
   // Orientation by slerp rather than lookAt(), so roll is possible at all and
   // so a change of heading eases instead of snapping.
   bank = lerp(bank, targetBank, 1 - Math.pow(.004, s));
-  const up = UP.clone().applyAxisAngle(
-    tmp.copy(lookAt).sub(camera.position).normalize(), bank);
-  mLook.lookAt(camera.position, lookAt, up);
-  qTarget.setFromRotationMatrix(mLook);
-  camera.quaternion.slerp(qTarget, 1 - Math.pow(.0009, s));
+  if (flight) {
+    const up = UP.clone().applyAxisAngle(
+      tmp.copy(lookAt).sub(camera.position).normalize(), bank);
+    mLook.lookAt(camera.position, lookAt, up);
+    qTarget.setFromRotationMatrix(mLook);
+    camera.quaternion.slerp(qTarget, 1 - Math.pow(.0009, s));
+    // Keep the free-look angles in step with where the flight is pointing, so
+    // the moment it ends and you grab the stick there is no snap.
+    const e3 = new T.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+    ctrl.yaw = e3.y; ctrl.pitch = e3.x;
+  } else {
+    // Yaw then pitch, never roll: a free camera that can roll is a camera you
+    // get lost in, and there is no horizon out here to right yourself against.
+    qTarget.setFromEuler(new T.Euler(ctrl.pitch, ctrl.yaw, 0, "YXZ"));
+    camera.quaternion.slerp(qTarget, 1 - Math.pow(.00004, s));
+    lookAt.copy(camera.position).addScaledVector(
+      new T.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), 50);
+  }
 
   // The tether, from just under the nose rather than the exact centre of the
   // screen, so it reads as coming off the ship and not out of your eye.
