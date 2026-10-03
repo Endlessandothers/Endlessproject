@@ -5,6 +5,11 @@
 Thumbs.db
 .DS_Store
 
+# Python bytecode. deckkit is imported by the deck builders, so running one
+# leaves a .pyc behind; one was committed.
+__pycache__/
+*.pyc
+
 # Node
 node_modules/
 sim/run-log.json

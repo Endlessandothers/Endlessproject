@@ -97,7 +97,7 @@ Create `/services`, `/packages`, `/docs` per `CLAUDE.md`. Only the Phase 0 servi
 - [ ] `/services/registry`, `/services/search`, `/packages/schemas` exist
 - [ ] Root `package.json` workspace, TypeScript strict mode, lint and test scripts
 - [ ] `PROJECT.md` moved to `/docs` to match the documented layout
-- [ ] `CLAUDE (5).md` renamed to `CLAUDE.md` so its invariants actually load
+- [x] `CLAUDE (5).md` renamed to `CLAUDE.md` so its invariants actually load
 
 ### 2. Define shared schemas: tool, event, gap — S
 
