@@ -1,6 +1,30 @@
 # Office lock files — created while a .pptx/.docx is open, never content
 ~$*
 
+# ---------------------------------------------------------------- docs/plans
+#
+# QA renders. Checking a deck's layout means converting it to PDF and then to
+# one JPEG per slide, and the pptx thumbnail script writes a labelled grid
+# beside it. All three are throwaway, all three land next to the deck, and all
+# three are binary — so committing them means a new blob per QA pass forever.
+docs/plans/*.pdf
+docs/plans/slide-*.jpg
+docs/plans/slide-*.png
+docs/plans/*thumbnails*.jpg
+docs/plans/*-thumbs*.jpg
+
+# THE .pptx FILES ARE NOT IGNORED, and that is deliberate.
+#
+# Three of the five are generated — build-phase-2, build-phase-3 and
+# build-summary each write theirs — so ignoring those looks obviously right.
+# It is not: endless-phase-0-v3.pptx and endless-phase-1.pptx have NO builder.
+# They were hand-built before deckkit existed, and git is the only copy.
+# Ignoring *.pptx would untrack them, and the next clean checkout would simply
+# not have them.
+#
+# Tracking three decks and ignoring two is worse than either, so all five stay.
+# If someone writes the two missing builders, revisit this.
+
 # OS cruft
 Thumbs.db
 .DS_Store
